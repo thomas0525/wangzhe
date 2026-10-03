@@ -38,11 +38,11 @@ python3 -m http.server 8000
 
 ## 语音播报
 
-语音是用 [edge-tts](https://github.com/rany2/edge-tts) 离线生成的 mp3，放在 `audio/voice/`，音色为 `zh-CN-YunjianNeural`。修改台词或换音色后重新生成：
+语音是用 [edge-tts](https://github.com/rany2/edge-tts) 离线生成的 mp3，放在 `audio/voice/`，音色为女声 `zh-CN-XiaoxiaoNeural`。修改台词或换音色后重新生成：
 
 ```bash
 bash tools/gen-voice.sh                      # 需要 uv 和网络
-VOICE=zh-CN-YunxiNeural bash tools/gen-voice.sh   # 换音色
+VOICE=zh-CN-XiaoyiNeural bash tools/gen-voice.sh   # 换音色（如更活泼的晓伊）
 ```
 
 调试参数：`?autoplay&speed=8` 让电脑同时控制双方，并以 8 倍速运行；`?start&hero=mage&enemy=blade&diff=hard` 跳过菜单直接开局。

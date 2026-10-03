@@ -5,9 +5,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT=audio/voice
 mkdir -p "$OUT"
-VOICE="${VOICE:-zh-CN-YunjianNeural}"
+VOICE="${VOICE:-zh-CN-XiaoxiaoNeural}"
 RATE="${RATE:-+8%}"
-PITCH="${PITCH:--4Hz}"
+PITCH="${PITCH:-+0Hz}"
 
 # 文件名|播报文本
 LINES='
