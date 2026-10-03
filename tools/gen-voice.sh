@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT=audio/voice
 mkdir -p "$OUT"
-VOICE="${VOICE:-zh-CN-XiaoxiaoNeural}"
+VOICE="${VOICE:-zh-CN-XiaoyiNeural}"
 RATE="${RATE:-+8%}"
 PITCH="${PITCH:-+0Hz}"
 
