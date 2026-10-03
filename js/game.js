@@ -10,9 +10,10 @@ import { FX, Indicator } from './fx.js';
 import { UI } from './ui.js';
 import { Input } from './input.js';
 import { AI } from './ai.js';
-import { sfx } from './audio.js';
+import { sfx, voice } from './audio.js';
 
 const STREAK_TEXT = { 2: '双杀！', 3: '大杀特杀！', 4: '主宰比赛！', 5: '无人能挡！', 6: '横扫千军！' };
+const STREAK_VOICE = { 2: 'double_kill', 3: 'triple_kill', 4: 'quadra_kill', 5: 'penta_kill', 6: 'rampage' };
 
 export class Game {
   constructor(opts) {
@@ -40,6 +41,8 @@ export class Game {
     this.indicator = new Indicator(this.scene);
     this.ui = new UI(this);
     this.sfx = (n) => sfx(n);
+    this.voice = (n, urgent) => voice(n, urgent);
+    this.crystalWarnAt = -99;
 
     // 防御塔与水晶
     for (const team of [BLUE, RED]) {
@@ -87,6 +90,7 @@ export class Game {
     window.addEventListener('resize', this.onResize);
     this.last = performance.now();
     this.ui.banner('欢迎来到峡谷对决', 'info');
+    this.schedule(0.6, () => this.voice('welcome'));
     this.loop = this.loop.bind(this);
     this.raf = requestAnimationFrame(this.loop);
   }
@@ -253,6 +257,11 @@ export class Game {
     if (target.kind === 'minion' && src.kind === 'tower') a = Math.max(a, target.stats.maxHp * 0.36);
     a = Math.max(1, a);
     target.hp -= a;
+    if (target.kind === 'crystal' && target.team === this.player.team && this.time - this.crystalWarnAt > 20 && target.hp > 0) {
+      this.crystalWarnAt = this.time;
+      this.ui.banner('我方水晶正在遭受攻击！', 'bad');
+      this.voice('crystal_attack');
+    }
     target.lastDamagedAt = this.time;
     target.lastAttacker = src;
     target.anim.hurt = 0.15;
@@ -299,6 +308,7 @@ export class Game {
         h.addXp(380);
         h.addBuff({ id: 'tyrant', dur: 90 });
         this.ui.banner(h.team === this.player.team ? '我方击败了峡谷巨兽！' : '敌方击败了峡谷巨兽！', h.team === this.player.team ? 'good' : 'bad');
+        this.voice(h.team === this.player.team ? 'tyrant_ally' : 'tyrant_enemy');
         this.ui.killFeed(h, u);
       }
       this.ui.removeBar(u);
@@ -321,14 +331,19 @@ export class Game {
         credit.addXp(180 + u.level * 50);
         credit.bountyStreak = (credit.bountyStreak || 0) + 1;
         u.bountyStreak = 0;
-        let text;
-        if (!this.firstBlood) { text = '第一滴血！'; this.firstBlood = true; }
-        else text = STREAK_TEXT[Math.min(6, credit.streak)] || (credit.streak > 6 ? '天下无双！' : '');
+        let text, line;
+        if (!this.firstBlood) { text = '第一滴血！'; line = 'first_blood'; this.firstBlood = true; }
+        else {
+          text = STREAK_TEXT[Math.min(6, credit.streak)] || (credit.streak > 6 ? '天下无双！' : '');
+          line = credit.streak > 6 ? 'legendary' : STREAK_VOICE[credit.streak];
+        }
+        this.voice(line || (u === this.player ? 'killed' : 'kill'));
         const mine = credit.team === this.player.team;
         this.ui.banner(text ? `${credit.name} ${text}` : `${credit.name} 击败了 ${u.name}`, mine ? 'good' : 'bad');
         this.sfx(mine ? 'kill' : 'death');
       } else {
         this.ui.banner(`${u.name} 被击败了`, u.team === this.player.team ? 'bad' : 'good');
+        this.voice(u === this.player ? 'executed' : 'kill');
         if (enemyHero) enemyHero.addXp(100);
       }
       this.ui.killFeed(credit || killer, u);
@@ -340,6 +355,7 @@ export class Game {
       this.ui.removeBar(u);
       if (enemyHero) { this.awardGold(enemyHero, 220); enemyHero.addXp(200); }
       this.ui.banner(u.team === this.player.team ? '我方防御塔被摧毁！' : '摧毁了敌方防御塔！', u.team === this.player.team ? 'bad' : 'good');
+      this.voice(u.team === this.player.team ? 'ally_tower' : 'enemy_tower');
       this.corpses.push({ u, t: 0, dur: 1.2, keep: true });
     } else if (u.kind === 'crystal') {
       this.fx.explosion(u.x, u.z, TEAM_COLOR[u.team]);
@@ -360,6 +376,7 @@ export class Game {
     this.input.finishAim(true);
     setTimeout(() => {
       this.sfx(win ? 'win' : 'lose');
+      this.voice(win ? 'victory' : 'defeat', true);
       this.opts.onEnd?.({ win, player: this.player, enemy: this.enemy, time: this.time });
     }, 2200);
   }
@@ -432,7 +449,7 @@ export class Game {
   // ---------- 刷兵 ----------
   spawnWave() {
     this.wave++;
-    if (this.wave === 1) { this.ui.banner('全军出击！', 'info'); }
+    if (this.wave === 1) { this.ui.banner('全军出击！', 'info'); this.voice('wave'); }
     const cannon = this.wave % 3 === 0;
     const scale = 1 + Math.floor(this.time / 60) * 0.06;
     for (const team of [BLUE, RED]) {
@@ -472,12 +489,13 @@ export class Game {
     for (const u of this.units) { u.px = u.x; u.pz = u.z; }
 
     // 公告
-    if (t > FIRST_WAVE - 5 && !this.announced.has('5s')) { this.announced.add('5s'); this.ui.banner('距离小兵出击还有 5 秒', 'info'); }
+    if (t > FIRST_WAVE - 5 && !this.announced.has('5s')) { this.announced.add('5s'); this.ui.banner('距离小兵出击还有 5 秒', 'info'); this.voice('countdown'); }
     if (t >= this.nextWave && !this.over) { this.spawnWave(); this.nextWave += WAVE_INTERVAL; }
     if (t >= this.tyrantAt && !this.units.some((u) => u.kind === 'monster' && u.alive)) {
       this.addUnit(new Tyrant(this, POCKETS[0].x, POCKETS[0].z));
       this.tyrantAt = Infinity;
       this.ui.banner('峡谷巨兽已出现在左上方野区', 'info');
+      this.voice('tyrant_spawn');
     }
 
     // 定时器

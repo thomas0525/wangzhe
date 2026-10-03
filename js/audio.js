@@ -76,3 +76,77 @@ export function sfx(name) {
   last[name] = now;
   try { SOUNDS[name](); } catch { /* ignore */ }
 }
+
+// ---------- 播报语音（Edge TTS 预生成的 mp3，见 tools/gen-voice.sh） ----------
+const VOICE_NAMES = [
+  'welcome', 'countdown', 'wave', 'first_blood', 'double_kill', 'triple_kill', 'quadra_kill', 'penta_kill',
+  'rampage', 'legendary', 'kill', 'killed', 'executed', 'ally_tower', 'enemy_tower', 'crystal_attack',
+  'tyrant_spawn', 'tyrant_ally', 'tyrant_enemy', 'victory', 'defeat',
+];
+const voices = {};
+let voiceOut = null;
+let voiceOn = true;
+let voiceQueue = [];
+let voiceBusy = false;
+let voiceSrc = null;
+let voiceSeq = 0;
+
+export function setVoiceOn(v) {
+  voiceOn = v;
+  if (!v) { voiceQueue = []; try { voiceSrc?.stop(); } catch { /* ignore */ } }
+}
+export function isVoiceOn() { return voiceOn; }
+
+// 结尾静音裁掉，连续播报更紧凑
+function trimEnd(buf) {
+  const d = buf.getChannelData(0);
+  let i = d.length - 1;
+  while (i > 0 && Math.abs(d[i]) < 0.01) i--;
+  return Math.min(buf.duration, i / buf.sampleRate + 0.12);
+}
+
+export function loadVoices(base = 'audio/voice/') {
+  if (!ctx || voiceOut) return;
+  voiceOut = ctx.createGain();
+  voiceOut.gain.value = 1;
+  voiceOut.connect(ctx.destination);
+  for (const name of VOICE_NAMES) {
+    voices[name] = fetch(base + name + '.mp3')
+      .then((r) => r.arrayBuffer())
+      .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)))
+      .then((buf) => ({ buf, dur: trimEnd(buf) }))
+      .catch(() => null);
+  }
+}
+
+function playNextVoice() {
+  if (voiceBusy || !voiceQueue.length) return;
+  const item = voiceQueue.shift();
+  if (performance.now() - item.at > 4000) return playNextVoice(); // 太旧的播报直接丢弃
+  voiceBusy = true;
+  const seq = ++voiceSeq;
+  Promise.resolve(voices[item.name]).then((v) => {
+    if (seq !== voiceSeq) return;
+    if (!v || muted || !voiceOn) { voiceBusy = false; return playNextVoice(); }
+    const s = ctx.createBufferSource();
+    s.buffer = v.buf;
+    s.connect(voiceOut);
+    s.start();
+    voiceSrc = s;
+    setTimeout(() => { if (seq !== voiceSeq) return; voiceBusy = false; playNextVoice(); }, v.dur * 1000);
+  });
+}
+
+// urgent：清空队列、打断当前播报（用于胜利/失败）
+export function voice(name, urgent = false) {
+  if (!ctx || muted || !voiceOn || !voices[name]) return;
+  if (urgent) {
+    voiceQueue = [];
+    try { voiceSrc?.stop(); } catch { /* ignore */ }
+    voiceSeq++;
+    voiceBusy = false;
+  }
+  if (voiceQueue.length >= 2) voiceQueue.shift();
+  voiceQueue.push({ name, at: performance.now() });
+  playNextVoice();
+}

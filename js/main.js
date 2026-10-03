@@ -4,7 +4,7 @@ import { Game } from './game.js';
 import { HERO_LIST, HEROES, pickEnemyHero } from './heroes.js';
 import { DIFFICULTY } from './config.js';
 import { buildHero } from './models.js';
-import { unlockAudio, setMuted, isMuted } from './audio.js';
+import { unlockAudio, setMuted, isMuted, loadVoices, setVoiceOn, isVoiceOn } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -119,6 +119,7 @@ const preview = {
 // ---------- 开局 ----------
 function start(settings) {
   unlockAudio();
+  loadVoices();
   lastSettings = settings;
   if (matchMedia('(pointer: coarse)').matches && !params.has('nofs')) {
     const el = document.documentElement;
@@ -179,6 +180,12 @@ $('#mute-btn').addEventListener('click', () => {
   setMuted(!isMuted());
   $('#mute-btn').textContent = '音效：' + (isMuted() ? '关' : '开');
 });
+$('#voice-btn').addEventListener('click', () => {
+  setVoiceOn(!isVoiceOn());
+  localSet('voice', isVoiceOn() ? '1' : '0');
+  $('#voice-btn').textContent = '语音播报：' + (isVoiceOn() ? '开' : '关');
+});
+if (localGet('voice') === '0') { setVoiceOn(false); $('#voice-btn').textContent = '语音播报：关'; }
 $('#surrender-btn').addEventListener('click', () => {
   if (!game) return;
   setPaused(false);

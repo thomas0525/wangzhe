@@ -13,6 +13,7 @@
 - 草丛可以隐身；左上野区 1:30 刷新“峡谷巨兽”，击败后获得 90 秒增益
 - 三个原创英雄：影刃（战士）、星澜（法师）、鸣镝（射手）
 - 三档电脑难度：简单 / 普通 / 困难
+- 播报员语音（微软 Edge TTS 生成）：全军出击、第一滴血、双杀……、防御塔被摧毁、胜利 / 失败等，暂停菜单可以关闭
 
 ## 操作
 
@@ -35,6 +36,15 @@ python3 -m http.server 8000
 # 打开 http://localhost:8000
 ```
 
+## 语音播报
+
+语音是用 [edge-tts](https://github.com/rany2/edge-tts) 离线生成的 mp3，放在 `audio/voice/`，音色为 `zh-CN-YunjianNeural`。修改台词或换音色后重新生成：
+
+```bash
+bash tools/gen-voice.sh                      # 需要 uv 和网络
+VOICE=zh-CN-YunxiNeural bash tools/gen-voice.sh   # 换音色
+```
+
 调试参数：`?autoplay&speed=8` 让电脑同时控制双方，并以 8 倍速运行；`?start&hero=mage&enemy=blade&diff=hard` 跳过菜单直接开局。
 
 ## 代码结构
@@ -51,9 +61,11 @@ js/ui.js       血条、飘字、小地图、商店
 js/map.js      地图场景与可行走区域
 js/models.js   低多边形模型（全部由几何体拼成）
 js/fx.js       技能特效与施法指示器
-js/audio.js    WebAudio 合成音效
+js/audio.js    WebAudio 合成音效 + 播报语音队列
+audio/voice/   Edge TTS 生成的播报语音
+tools/gen-voice.sh  语音生成脚本
 ```
 
 ---
 
-同人风格小游戏，角色、模型和音效都是原创，与腾讯《王者荣耀》没有任何关联。
+同人风格小游戏，角色、模型、音效都是原创，语音由 Edge TTS 合成，与腾讯《王者荣耀》没有任何关联。
