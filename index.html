@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0b1424" />
+  <title>峡谷对决 3D</title>
+  <meta name="description" content="浏览器里的 3D 1v1 MOBA 小游戏：单人对战电脑，支持手机触屏与键盘鼠标。" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+  <div id="game"></div>
+
+  <!-- 战斗 HUD -->
+  <div id="hud" class="hidden">
+    <div id="bars"></div>
+    <div id="floats"></div>
+
+    <div id="topbar">
+      <div class="score"><span id="score-blue" class="b">0</span><span class="vs">⚔</span><span id="score-red" class="r">0</span></div>
+      <div id="timer">00:00</div>
+      <div id="kda">0/0 · 补刀 0</div>
+    </div>
+    <canvas id="minimap" width="140" height="140"></canvas>
+    <div id="feed"></div>
+    <button id="pause-btn" aria-label="暂停">⏸</button>
+
+    <div id="banner"></div>
+
+    <div id="leftpanel">
+      <button id="shop-btn"><span>💰</span><b id="gold">0</b></button>
+      <div id="rec"><span id="rec-icon"></span><span id="rec-name"></span><span id="rec-price"></span><button id="rec-buy">购买</button></div>
+    </div>
+
+    <div id="selfinfo">
+      <span id="lvl">Lv.1</span>
+      <div id="xp"><i></i></div>
+    </div>
+
+    <div id="recall-bar"><span>回城中…</span><div><i></i></div></div>
+
+    <div id="controls">
+      <div id="joy-zone"><div id="joy-base"><div id="joy-knob"></div></div></div>
+      <div id="btns">
+        <button id="btn-atk" class="btn big"><span class="ic">⚔️</span><span class="key">空格</span></button>
+        <button id="btn-s0" class="btn sk"><span class="ic"></span><span class="nm"></span><span class="cd"></span><span class="lk">🔒</span><span class="key">Q</span></button>
+        <button id="btn-s1" class="btn sk"><span class="ic"></span><span class="nm"></span><span class="cd"></span><span class="lk">2级</span><span class="key">E</span></button>
+        <button id="btn-s2" class="btn sk ult"><span class="ic"></span><span class="nm"></span><span class="cd"></span><span class="lk">4级</span><span class="key">R</span></button>
+        <button id="btn-flash" class="btn small"><span class="ic"></span><span class="cd"></span><span class="key">F</span></button>
+        <button id="btn-recall" class="btn small"><span class="ic">🏠</span><span class="key">B</span></button>
+      </div>
+      <div id="cancel-zone">✕ 取消施法</div>
+    </div>
+
+    <div id="dead"><div>你已阵亡</div><div class="cnt"><b id="respawn">0</b> 秒后复活</div></div>
+
+    <div id="shop">
+      <div class="shop-head"><b>装备商店</b><span>💰 <i id="shop-gold">0</i></span><button id="shop-close">✕</button></div>
+      <div id="item-slots"></div>
+      <div id="shop-grid"></div>
+      <p class="shop-tip">⭐ 推荐出装已高亮；任何时候都可以购买，最多 6 件。</p>
+    </div>
+  </div>
+
+  <!-- 主菜单 -->
+  <div id="menu">
+    <canvas id="preview"></canvas>
+    <div class="menu-inner">
+      <h1>峡谷对决 <small>3D</small></h1>
+      <p class="sub">单人 1v1 · 对战电脑 · 推掉敌方水晶即可获胜</p>
+      <div id="hero-cards"></div>
+      <div id="hero-detail"></div>
+      <div class="row">
+        <span class="label">难度</span>
+        <div id="diffs"></div>
+      </div>
+      <button id="start-btn">开始对战</button>
+      <details class="help">
+        <summary>操作说明</summary>
+        <div>
+          <p><b>手机：</b>左侧拖动摇杆移动；右侧按普攻键自动攻击附近目标（长按持续攻击）；技能键<b>点按</b>自动释放，<b>拖动</b>可手动瞄准，拖到顶部“取消施法”可取消。</p>
+          <p><b>电脑：</b>WASD 移动，空格/J 普攻，Q/E/R 技能（朝鼠标方向，松开释放），F 闪现，B 回城，P 商店。</p>
+          <p><b>规则：</b>每方两座防御塔 + 一座水晶，必须按顺序摧毁。草丛可以隐身；左上野区会刷新“峡谷巨兽”，击败后获得增益。</p>
+        </div>
+      </details>
+      <p class="note">同人风格小游戏，原创角色与美术，与任何商业游戏无关。</p>
+    </div>
+    <div id="rotate-tip">📱 横屏游玩体验更佳</div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="pause" class="overlay hidden">
+    <div class="panel">
+      <h2>暂停</h2>
+      <button id="resume-btn">继续游戏</button>
+      <button id="mute-btn">音效：开</button>
+      <button id="surrender-btn" class="danger">投降</button>
+    </div>
+  </div>
+
+  <!-- 结算 -->
+  <div id="end" class="overlay hidden">
+    <div class="panel">
+      <h2 id="end-title">胜利</h2>
+      <table id="end-stats"></table>
+      <div class="row-btns">
+        <button id="again-btn">再来一局</button>
+        <button id="menu-btn" class="ghost">返回主菜单</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading">加载中…</div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
