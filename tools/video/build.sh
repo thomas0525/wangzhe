@@ -16,7 +16,7 @@ trap 'kill $SERVER 2>/dev/null' EXIT
 sleep 1
 URL="http://localhost:$PORT/"
 
-for L in v h; do
+for L in ${LAYOUTS:-v h}; do  # LAYOUTS=h 只生成横版
   FR="frames-$L"
   mkdir -p "$FR"
   node capture.mjs --layout=$L --out="$FR" --url="$URL"
@@ -29,8 +29,10 @@ for L in v h; do
   echo "✓ $OUT/峡谷对决-宣传-$NAME.mp4"
 done
 
+if [ -z "${SKIP_COVERS:-}" ]; then
 node capture.mjs --cover=xhs --out="$OUT" --url="$URL"
 node capture.mjs --cover=bili --layout=h --out="$OUT" --url="$URL"
 mv "$OUT/cover-xhs.jpg" "$OUT/小红书封面-1080x1440.jpg"
 mv "$OUT/cover-bili.jpg" "$OUT/B站封面-1920x1080.jpg"
+fi
 ls -la "$OUT"

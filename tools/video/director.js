@@ -508,7 +508,7 @@ for (const s of SCENES) { s.start = acc; acc += s.dur; }
 const TOTAL = acc;
 
 // ---------- 覆盖层（标题、字幕、标签、转场） ----------
-const HIGHLIGHT = ['王者农药', 'AI', '红蓝buff', '大招', '闪现开大', '峡谷巨兽', '回城', '神装', '水晶', '防御塔', '越塔', '推塔', '走位', '预判', '扣1', '三个原创英雄', '泉水'];
+const HIGHLIGHT = ['王者荣耀', 'AI', '红蓝buff', '大招', '闪现开大', '峡谷巨兽', '回城', '神装', '水晶', '防御塔', '越塔', '推塔', '走位', '预判', '扣1', '三个原创英雄', '泉水'];
 function hl(text) {
   let s = text;
   for (const w of HIGHLIGHT) s = s.split(w).join(`<em>${w}</em>`);
@@ -524,6 +524,7 @@ function injectOverlay() {
     -webkit-text-stroke: 5px #000; paint-order: stroke fill; text-shadow: 0 3px 8px rgba(0,0,0,.6); opacity: 0; }
   #vo .cap.on { opacity: 1; }
   #vo .cap.low { ${VERT ? 'top: 80%;' : 'bottom: 6%;'} }
+  ${VERT ? '' : '#vo .cap.cap-off { display: none; }'}
   #vo .cap em { font-style: normal; color: #ffd84a; }
   #vo .chip { position: absolute; ${VERT ? 'left: 50%; top: 29.5%; transform: translateX(-50%);' : 'right: 14px; top: 12px;'} white-space: nowrap;
     padding: ${VERT ? '9px 22px' : '7px 18px'}; border-radius: 40px; font-size: ${VERT ? 22 : 19}px; font-weight: 900; color: #fff;
@@ -601,7 +602,7 @@ function showTitle(on) {
   if (!on) return;
   const d = document.createElement('div');
   d.className = 'title';
-  d.innerHTML = '<div class="big">太炸裂了！</div><br><div class="sub">一句话 <b>AI</b> 生成「王者农药」</div>';
+  d.innerHTML = '<div class="big">太炸裂了！</div><br><div class="sub">一句话 <b>AI</b> 生成「王者荣耀」</div>';
   $('#vo').appendChild(d);
 }
 
@@ -612,7 +613,7 @@ function showOutro(on) {
   d.className = 'outro';
   d.innerHTML = `
     <div class="name">峡谷对决 3D</div>
-    <div class="tag">一句话 · AI 生成的「王者农药」</div>
+    <div class="tag">一句话 · AI 生成的「王者荣耀」</div>
     <div class="row">
       <span class="pill" style="animation-delay:.6s">🧠 代码 AI 写</span>
       <span class="pill" style="animation-delay:.7s">🎨 建模 AI 搭</span>
@@ -630,7 +631,7 @@ function showCover() {
     <div class="badge">全程 AI 制作</div>
     <div class="c1">太炸裂了！</div>
     <div class="c2">一句话 <b>AI</b> 生成</div>
-    <div class="c3">王者农药</div>
+    <div class="c3">王者荣耀</div>
     <div class="c4">3D 实时对战 · 手机能玩</div>`;
   $('#vo').appendChild(d);
   $('#hud').classList.add('vo-hide');
@@ -661,6 +662,7 @@ function enterScene(i) {
   s.setup();
   if (g && !s.menu) g.snapCamera();
   $('#vo .cap').classList.toggle('low', !!s.capLow);
+  $('#vo .cap').classList.toggle('cap-off', !!s.outro);
   if (s.narr) cue('narr', s.narr[0], s.start + s.narr[1]);
   showTitle(!!s.title && !COVER);
   if (COVER) showCover();
