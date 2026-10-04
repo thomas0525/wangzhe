@@ -203,6 +203,10 @@ buildMenu();
 preview.init();
 $('#loading').classList.add('done');
 
+// 宣传视频录制（tools/video）
+window.__app = { start, backToMenu, selectHero };
+if (params.has('capture')) import('../tools/video/director.js');
+
 if (params.has('start') || params.has('autoplay')) {
   const hero = params.get('hero') || state.hero;
   start({ heroId: hero, enemyId: params.get('enemy') || pickEnemyHero(hero), difficulty: params.get('diff') || state.diff });

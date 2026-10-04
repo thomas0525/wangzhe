@@ -33,6 +33,27 @@ export function laneT(x, z) {
   return (dx * LANE_DIR.x + dz * LANE_DIR.z) / L;
 }
 
+// 野区：每方一红一蓝（关于地图中心点对称）
+export const JUNGLE_RADIUS = 6;
+export const JUNGLE = [
+  { ...lanePoint(0.27, -13), kind: 'red', side: 0 },
+  { ...lanePoint(0.27, 13), kind: 'blue', side: 0 },
+  { ...lanePoint(0.73, 13), kind: 'red', side: 1 },
+  { ...lanePoint(0.73, -13), kind: 'blue', side: 1 },
+];
+
+export const MONSTERS = {
+  tyrant: { id: 'tyrant', name: '峡谷巨兽', hp: 6500, hpGrow: 450, atk: 230, atkGrow: 18, armor: 140, range: 3.2, as: 0.7, radius: 1.6, barHeight: 4.2, gold: 260, xp: 380, buff: { id: 'tyrant', dur: 90 }, first: 90, respawn: 120, fxColor: 0xb27bff },
+  red: { id: 'red', name: '炽焰魔像', hp: 2600, hpGrow: 220, atk: 105, atkGrow: 10, armor: 90, range: 2.8, as: 0.8, radius: 1.3, barHeight: 3.6, gold: 110, xp: 160, buff: { id: 'redbuff', dur: 70 }, first: 20, respawn: 90, fxColor: 0xff6a2a },
+  blue: { id: 'blue', name: '寒霜魔像', hp: 2400, hpGrow: 200, atk: 95, atkGrow: 9, armor: 80, range: 2.8, as: 0.8, radius: 1.3, barHeight: 3.6, gold: 110, xp: 160, buff: { id: 'bluebuff', dur: 70 }, first: 20, respawn: 90, fxColor: 0x5ab4ff },
+};
+
+export const BUFF_INFO = {
+  redbuff: { icon: '🔥', name: '红buff', desc: '普攻灼烧减速' },
+  bluebuff: { icon: '💧', name: '蓝buff', desc: '冷却缩减 20%' },
+  tyrant: { icon: '👑', name: '巨兽之力', desc: '伤害提升 15%' },
+};
+
 export const TOWER_T = [
   [0.18, 0.37], // 蓝方 高地塔, 外塔
   [0.82, 0.63], // 红方 高地塔, 外塔

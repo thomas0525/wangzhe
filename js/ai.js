@@ -224,13 +224,20 @@ export class AI {
     }
 
     // 打巨兽：敌人死亡或很远，且自身状态好
-    const tyrant = g.units.find((u) => u.kind === 'monster' && u.alive);
+    const tyrant = g.units.find((u) => u.kind === 'monster' && u.alive && u.def.id === 'tyrant');
     if (tyrant && h.level >= 4 && hpPct > 0.7 && (!foe.alive || (!foeVis && foe.respawnAt - g.time > 6)) && this.enemyMinions(12).length === 0) {
       this.set(null, tyrant);
       if (h.dist(tyrant) < 6) this.useSkillsOn(tyrant, true, true);
       return;
     }
-    if (h.intent.attack?.kind === 'monster' && tyrant && (foeVis && foeDist < 12 || hpPct < 0.45)) {
+    // 拿自家野区的红蓝 buff
+    const camp = g.units.find((u) => u.kind === 'monster' && u.alive && u.def.id !== 'tyrant' && (laneT(u.x, u.z) < 0.5) === (h.team === 0) && !h.hasBuff(u.def.buff.id));
+    if (camp && h.level >= 2 && hpPct > 0.55 && (!foeVis || foeDist > 16) && this.enemyMinions(14).length === 0 && h.dist(camp) < 45) {
+      this.set(null, camp);
+      if (h.dist(camp) < 6) this.useSkillsOn(camp, true, true);
+      return;
+    }
+    if (h.intent.attack?.kind === 'monster' && (foeVis && foeDist < 12 || hpPct < 0.45)) {
       this.set(null, null, this.homePoint(0.05));
       return;
     }

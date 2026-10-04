@@ -1,10 +1,10 @@
 // 游戏主循环与规则
 import * as THREE from 'three';
 import {
-  BLUE, RED, SPRING, TOWER_T, LANE_NORMAL, POCKETS, WAVE_INTERVAL, FIRST_WAVE, PASSIVE_GOLD, DIFFICULTY, TEAM_COLOR,
+  BLUE, RED, SPRING, TOWER_T, LANE_NORMAL, POCKETS, JUNGLE, MONSTERS, BUFF_INFO, WAVE_INTERVAL, FIRST_WAVE, PASSIVE_GOLD, DIFFICULTY, TEAM_COLOR,
 } from './config.js';
 import { buildMap, clampToMap, bushAt } from './map.js';
-import { Hero, Minion, Tower, Tyrant } from './units.js';
+import { Hero, Minion, Tower, Monster } from './units.js';
 import { HEROES } from './heroes.js';
 import { FX, Indicator } from './fx.js';
 import { UI } from './ui.js';
@@ -33,7 +33,10 @@ export class Game {
     this.firstBlood = false;
     this.wave = 0;
     this.nextWave = FIRST_WAVE;
-    this.tyrantAt = 90;
+    this.camps = [
+      { def: MONSTERS.tyrant, x: POCKETS[0].x, z: POCKETS[0].z, nextAt: MONSTERS.tyrant.first, unit: null },
+      ...JUNGLE.map((j) => ({ def: MONSTERS[j.kind], x: j.x, z: j.z, side: j.side, nextAt: MONSTERS[j.kind].first, unit: null })),
+    ];
     this.announced = new Set();
 
     this.initRenderer();
@@ -303,17 +306,25 @@ export class Game {
       this.corpses.push({ u, t: 0, dur: 0.7 });
     } else if (u.kind === 'monster') {
       const h = killer?.kind === 'hero' ? killer : null;
+      const def = u.def;
       if (h) {
-        this.awardGold(h, 260);
-        h.addXp(380);
-        h.addBuff({ id: 'tyrant', dur: 90 });
-        this.ui.banner(h.team === this.player.team ? '我方击败了峡谷巨兽！' : '敌方击败了峡谷巨兽！', h.team === this.player.team ? 'good' : 'bad');
-        this.voice(h.team === this.player.team ? 'tyrant_ally' : 'tyrant_enemy');
+        this.awardGold(h, def.gold);
+        h.addXp(def.xp);
+        h.addBuff({ ...def.buff });
+        const mine = h.team === this.player.team;
+        if (def.id === 'tyrant') {
+          this.ui.banner(mine ? '我方击败了峡谷巨兽！' : '敌方击败了峡谷巨兽！', mine ? 'good' : 'bad');
+          this.voice(mine ? 'tyrant_ally' : 'tyrant_enemy');
+        } else {
+          const info = BUFF_INFO[def.buff.id];
+          this.ui.banner(mine ? `获得${info.name}：${info.desc}` : `敌方拿下了${info.name}`, mine ? 'good' : 'bad');
+        }
         this.ui.killFeed(h, u);
       }
       this.ui.removeBar(u);
       this.corpses.push({ u, t: 0, dur: 1.2 });
-      this.tyrantAt = this.time + 120;
+      const camp = this.camps.find((c) => c.unit === u);
+      if (camp) camp.nextAt = this.time + def.respawn;
       this.sfx('destroy');
     } else if (u.kind === 'hero') {
       u.deaths++;
@@ -491,11 +502,14 @@ export class Game {
     // 公告
     if (t > FIRST_WAVE - 5 && !this.announced.has('5s')) { this.announced.add('5s'); this.ui.banner('距离小兵出击还有 5 秒', 'info'); this.voice('countdown'); }
     if (t >= this.nextWave && !this.over) { this.spawnWave(); this.nextWave += WAVE_INTERVAL; }
-    if (t >= this.tyrantAt && !this.units.some((u) => u.kind === 'monster' && u.alive)) {
-      this.addUnit(new Tyrant(this, POCKETS[0].x, POCKETS[0].z));
-      this.tyrantAt = Infinity;
-      this.ui.banner('峡谷巨兽已出现在左上方野区', 'info');
-      this.voice('tyrant_spawn');
+    for (const c of this.camps) {
+      if (t < c.nextAt || c.unit?.alive) continue;
+      c.unit = this.addUnit(new Monster(this, c.def, c.x, c.z));
+      c.nextAt = Infinity;
+      if (c.def.id === 'tyrant') {
+        this.ui.banner('峡谷巨兽已出现在左上方野区', 'info');
+        this.voice('tyrant_spawn');
+      }
     }
 
     // 定时器
@@ -631,6 +645,7 @@ export class Game {
       h.mesh.visible = vis;
       const ring = h.mesh.getObjectByName('ring');
       if (ring) ring.material.opacity = h.inBush >= 0 ? 0.35 : 0.8;
+      this.updateAuras(h);
     }
     this.map.bushMat.opacity = p.alive && p.inBush >= 0 ? 0.55 : 1;
     for (const u of this.units) if (u.alive) u.syncMesh(dt * this.speed);
@@ -667,12 +682,36 @@ export class Game {
     document.body.classList.toggle('dead-gray', !p.alive && !this.over);
   }
 
+  // 红蓝 buff / 巨兽之力 脚下光环
+  updateAuras(h) {
+    if (!h.auras) {
+      h.auras = {};
+      const defs = { redbuff: [0xff5a1a, 1.3], bluebuff: [0x3aa8ff, 1.55], tyrant: [0xc07bff, 1.8] };
+      for (const [id, [col, r]] of Object.entries(defs)) {
+        const m = new THREE.Mesh(
+          new THREE.RingGeometry(r - 0.12, r, 40, 1, 0, Math.PI * 1.6),
+          new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })
+        );
+        m.rotation.x = -Math.PI / 2;
+        m.position.y = 0.08;
+        h.mesh.add(m);
+        h.auras[id] = m;
+      }
+    }
+    let i = 0;
+    for (const [id, m] of Object.entries(h.auras)) {
+      m.visible = h.hasBuff(id);
+      m.rotation.z = this.time * (2 + i++) * (i % 2 ? 1 : -1);
+    }
+  }
+
   destroy() {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
     this.input.dispose();
     this.ui.dispose();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     document.body.classList.remove('dead-gray');
   }

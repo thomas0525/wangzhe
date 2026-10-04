@@ -224,6 +224,53 @@ export function buildCrystal(team) {
   return root;
 }
 
+export function buildGolem(kind) {
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+  const glow = kind === 'red' ? 0xff4a1a : 0x2a9bff;
+  const stone = mat(kind === 'red' ? 0x6e4a3e : 0x46576e);
+  const core = mat(glow, { emissive: glow, emissiveIntensity: 1.6 });
+  const torso = mesh(G.box, stone, 0, 1.7, 0);
+  scaled(torso, 1.7, 1.5, 1.2);
+  torso.rotation.y = 0.1;
+  body.add(torso);
+  const heart = mesh(G.oct, core, 0, 1.8, 0.62, false);
+  heart.scale.setScalar(0.35);
+  body.add(heart);
+  const head = mesh(G.box, stone, 0, 2.75, 0.15);
+  scaled(head, 0.8, 0.6, 0.7);
+  body.add(head);
+  for (const s of [-1, 1]) {
+    const eye = mesh(G.sphere, core, s * 0.2, 2.8, 0.52, false);
+    eye.scale.setScalar(0.09);
+    body.add(eye);
+    const shoulder = mesh(G.sphere, stone, s * 1.05, 2.25, 0);
+    shoulder.scale.setScalar(0.5);
+    body.add(shoulder);
+    const arm = mesh(G.box, stone, s * 1.15, 1.35, 0.1);
+    scaled(arm, 0.5, 1.3, 0.55);
+    body.add(arm);
+    const fist = mesh(G.box, core, s * 1.15, 0.6, 0.15);
+    fist.scale.setScalar(0.5);
+    body.add(fist);
+    const leg = mesh(G.box, stone, s * 0.45, 0.45, 0);
+    scaled(leg, 0.55, 0.9, 0.6);
+    leg.name = s < 0 ? 'legL' : 'legR';
+    body.add(leg);
+  }
+  for (let i = 0; i < 4; i++) {
+    const crystal = mesh(G.oct, core, (i - 1.5) * 0.4, 2.6 + (i % 2) * 0.2, -0.55, false);
+    crystal.scale.set(0.15, 0.4, 0.15);
+    body.add(crystal);
+  }
+  const light = new THREE.PointLight(glow, 8, 7, 1.8);
+  light.position.set(0, 2, 1.2);
+  root.add(light);
+  root.userData.body = body;
+  return root;
+}
+
 export function buildTyrant() {
   const root = new THREE.Group();
   const body = new THREE.Group();

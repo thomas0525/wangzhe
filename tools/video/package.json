@@ -1,0 +1,10 @@
+{
+  "name": "xgdj-promo-video",
+  "private": true,
+  "type": "module",
+  "description": "峡谷对决 3D 宣传视频录制工具",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "playwright": "^1.50.0"
+  }
+}

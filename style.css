@@ -89,6 +89,12 @@ body.dead-gray #game canvas { filter: grayscale(0.85) brightness(0.8); }
 @keyframes pulse { 50% { box-shadow: 0 0 14px rgba(255, 211, 107, .6); } }
 
 #selfinfo { position: absolute; left: 50%; bottom: calc(8px + var(--sab)); transform: translateX(-50%); display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+#buffs { display: flex; gap: 4px; }
+.buff { position: relative; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; background: rgba(0,0,0,.55); border: 2px solid #888; }
+.buff.redbuff { border-color: #ff6a3a; box-shadow: 0 0 8px #ff6a3a; }
+.buff.bluebuff { border-color: #5ab4ff; box-shadow: 0 0 8px #5ab4ff; }
+.buff.tyrant { border-color: #c07bff; box-shadow: 0 0 8px #c07bff; }
+.buff i { position: absolute; right: -6px; bottom: -6px; font-style: normal; font-size: 9px; background: #000; border-radius: 6px; padding: 0 3px; }
 #xp { width: 120px; height: 5px; background: rgba(0,0,0,.6); border-radius: 3px; overflow: hidden; }
 #xp i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #9b6bff, #d4b5ff); }
 

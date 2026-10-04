@@ -1,6 +1,6 @@
 // 地图：场景搭建 + 可行走区域
 import * as THREE from 'three';
-import { BASE, SPRING, LANE_HALF, BASE_RADIUS, POCKETS, POCKET_RADIUS, BUSHES, TEAM_COLOR, LANE_DIR, LANE_NORMAL } from './config.js';
+import { BASE, SPRING, LANE_HALF, BASE_RADIUS, POCKETS, POCKET_RADIUS, JUNGLE, JUNGLE_RADIUS, BUSHES, TEAM_COLOR, LANE_DIR, LANE_NORMAL, lanePoint } from './config.js';
 import { mat } from './models.js';
 
 const AREAS = [
@@ -8,6 +8,7 @@ const AREAS = [
   { x: BASE[1].x + 3, z: BASE[1].z - 3, r: BASE_RADIUS },
   { x: POCKETS[0].x, z: POCKETS[0].z, r: POCKET_RADIUS },
   { x: POCKETS[1].x, z: POCKETS[1].z, r: POCKET_RADIUS },
+  ...JUNGLE.map((j) => ({ x: j.x, z: j.z, r: JUNGLE_RADIUS })),
 ];
 
 function segInfo(x, z) {
@@ -114,13 +115,28 @@ export function buildMap(scene, quality) {
   lane.position.y = 0.02;
   lane.receiveShadow = true;
   group.add(lane);
-  // 路边石沿
+  // 路边石沿（在基地、野区入口处断开）
+  const STEPS = 280;
   for (const s of [-1, 1]) {
-    const curb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, laneLen), mat(0x8c8270));
-    curb.rotation.y = lane.rotation.z;
-    curb.position.set(LANE_NORMAL.x * s * (LANE_HALF + 0.25), 0.17, LANE_NORMAL.z * s * (LANE_HALF + 0.25));
-    curb.receiveShadow = true;
-    group.add(curb);
+    let startK = -1;
+    for (let k = 0; k <= STEPS; k++) {
+      const p = lanePoint(k / STEPS, s * (LANE_HALF + 0.25));
+      const open = k === STEPS || AREAS.some((a) => Math.hypot(p.x - a.x, p.z - a.z) < a.r + 0.2);
+      if (!open && startK < 0) startK = k;
+      if (open && startK >= 0) {
+        const t0 = startK / STEPS, t1 = (k - 1) / STEPS;
+        const len = (t1 - t0) * laneLen;
+        if (len > 0.5) {
+          const mid = lanePoint((t0 + t1) / 2, s * (LANE_HALF + 0.25));
+          const curb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, len), mat(0x8c8270));
+          curb.rotation.y = lane.rotation.z;
+          curb.position.set(mid.x, 0.17, mid.z);
+          curb.receiveShadow = true;
+          group.add(curb);
+        }
+        startK = -1;
+      }
+    }
   }
 
   // 基地平台、泉水
@@ -160,12 +176,20 @@ export function buildMap(scene, quality) {
   group.userData.water = water;
 
   // 野区小平台
-  for (const p of POCKETS) {
-    const plat = new THREE.Mesh(new THREE.CircleGeometry(POCKET_RADIUS + 0.3, 32), new THREE.MeshStandardMaterial({ color: 0x5f7d3e, roughness: 1 }));
+  for (const p of [...POCKETS.map((q) => ({ ...q, r: POCKET_RADIUS })), ...JUNGLE.map((q) => ({ ...q, r: JUNGLE_RADIUS }))]) {
+    const plat = new THREE.Mesh(new THREE.CircleGeometry(p.r + 0.3, 32), new THREE.MeshStandardMaterial({ color: 0x5f7d3e, roughness: 1 }));
     plat.rotation.x = -Math.PI / 2;
     plat.position.set(p.x, 0.035, p.z);
     plat.receiveShadow = true;
     group.add(plat);
+    if (p.kind) {
+      // 野怪营地的符文圈
+      const col = p.kind === 'red' ? 0xff5a2a : 0x4aa8ff;
+      const rune = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.9, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.45, depthWrite: false }));
+      rune.rotation.x = -Math.PI / 2;
+      rune.position.set(p.x, 0.06, p.z);
+      group.add(rune);
+    }
   }
 
   // 草丛

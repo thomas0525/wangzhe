@@ -1,6 +1,6 @@
 // HUD：血条、飘字、小地图、商店、公告
 import * as THREE from 'three';
-import { ITEMS, ITEM_BY_ID, TEAM_CSS, BASE, SPRING, LANE_HALF, POCKETS, POCKET_RADIUS, XP_TABLE, MAX_LEVEL } from './config.js';
+import { ITEMS, ITEM_BY_ID, TEAM_CSS, BASE, SPRING, LANE_HALF, POCKETS, POCKET_RADIUS, JUNGLE, JUNGLE_RADIUS, BUFF_INFO, XP_TABLE, MAX_LEVEL } from './config.js';
 
 const $ = (s) => document.querySelector(s);
 const v3 = new THREE.Vector3();
@@ -183,6 +183,13 @@ export class UI {
         $('#rec-price').textContent = '💰' + price;
       }
     } else recEl.classList.remove('show');
+    // buff 图标
+    let bh = '';
+    for (const b of p.buffs) {
+      const info = BUFF_INFO[b.id];
+      if (info) bh += `<span class="buff ${b.id}">${info.icon}<i>${Math.ceil(b.until - g.time)}</i></span>`;
+    }
+    if (bh !== this.lastBuffHtml) { $('#buffs').innerHTML = bh; this.lastBuffHtml = bh; }
     // 经验条
     const lv = p.level;
     const xpPct = lv >= MAX_LEVEL ? 1 : (p.xp - XP_TABLE[lv - 1]) / (XP_TABLE[lv] - XP_TABLE[lv - 1]);
@@ -220,6 +227,7 @@ export class UI {
     c.stroke();
     c.fillStyle = '#5f7d3e';
     for (const p of POCKETS) { c.beginPath(); c.arc(tx(p.x), tz(p.z), POCKET_RADIUS * S, 0, 7); c.fill(); }
+    for (const p of JUNGLE) { c.beginPath(); c.arc(tx(p.x), tz(p.z), JUNGLE_RADIUS * S, 0, 7); c.fill(); }
     c.strokeStyle = 'rgba(63,167,214,0.8)';
     c.lineWidth = 6 * S;
     c.beginPath(); c.moveTo(tx(-25), tz(-25)); c.lineTo(tx(25), tz(25)); c.stroke();
@@ -243,7 +251,7 @@ export class UI {
         c.fillStyle = col;
         c.fillRect(tx(u.x) - 1.5, tz(u.z) - 1.5, 3, 3);
       } else if (u.kind === 'monster') {
-        c.fillStyle = col;
+        c.fillStyle = u.def.id === 'red' ? '#ff6a3a' : u.def.id === 'blue' ? '#5ab4ff' : col;
         c.beginPath(); c.arc(tx(u.x), tz(u.z), 4, 0, 7); c.fill();
       }
     }

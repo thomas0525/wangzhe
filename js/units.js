@@ -1,7 +1,7 @@
 // 单位：英雄、小兵、防御塔、水晶、野怪
 import * as THREE from 'three';
 import { MINION_TYPES, ITEM_BY_ID, XP_TABLE, MAX_LEVEL, SPRING, BASE, lanePoint, laneT } from './config.js';
-import { buildHero, buildMinion, buildTower, buildCrystal, buildTyrant } from './models.js';
+import { buildHero, buildMinion, buildTower, buildCrystal, buildTyrant, buildGolem } from './models.js';
 import { bushAt } from './map.js';
 
 let UID = 0;
@@ -127,6 +127,11 @@ export class Unit {
       if (!target.alive) return;
       g.damage(this, target, amount, 'phys', { basic: true, crit });
       this.onBasicHit?.(target);
+      if (this.kind === 'hero' && this.hasBuff('redbuff') && target.alive) {
+        g.damage(this, target, 20 + this.level * 8, 'true');
+        target.addBuff({ id: 'burn', dur: 1.5, speedMul: 0.75 });
+        g.fx.burst(target.x, 1, target.z, 0xff6a2a, 6);
+      }
     };
     if (this.stats.range > 3) {
       g.addHoming(this, target, this.projectileStyle || {}, onHit);
@@ -247,6 +252,7 @@ export class Hero extends Unit {
       if (b.speedMul) speedMul *= b.speedMul;
       if (b.asBonus) buffAs += b.asBonus * (b.count || 1);
       if (b.atkMul) s.atk *= b.atkMul;
+      if (b.id === 'bluebuff') { s.cdr += 0.2; s.regen += 25; }
     }
     s.as = Math.min(2.5, as * (1 + asPct + buffAs));
     s.speed = (speed + speedAdd) * speedMul;
@@ -599,21 +605,24 @@ export class Tower extends Unit {
   syncMesh() {}
 }
 
-// ---------------- 野怪：峡谷巨兽 ----------------
-export class Tyrant extends Unit {
-  constructor(game, x, z) {
+// ---------------- 野怪：峡谷巨兽、红蓝魔像 ----------------
+export class Monster extends Unit {
+  constructor(game, def, x, z) {
     super(game, {
-      team: 2, kind: 'monster', name: '峡谷巨兽', x, z, radius: 1.6, mesh: buildTyrant(),
-      base: { maxHp: 6500, atk: 230, armor: 140, range: 3.2, as: 0.7, speed: 5 }, mass: 8, barHeight: 4.2,
+      team: 2, kind: 'monster', name: def.name, x, z, radius: def.radius, mesh: def.id === 'tyrant' ? buildTyrant() : buildGolem(def.id),
+      base: { maxHp: def.hp, atk: def.atk, armor: def.armor, range: def.range, as: def.as, speed: 5 }, mass: 8, barHeight: def.barHeight,
     });
+    this.def = def;
     this.home = { x, z };
     this.facing = Math.atan2(-x, -z);
+    this.computeStats();
+    this.hp = this.stats.maxHp;
   }
 
   applyStatMods(s) {
     const m = Math.floor(this.game.time / 60);
-    s.maxHp = this.base.maxHp + m * 450;
-    s.atk = this.base.atk + m * 18;
+    s.maxHp = this.base.maxHp + m * this.def.hpGrow;
+    s.atk = this.base.atk + m * this.def.atkGrow;
   }
 
   update(dt) {
@@ -633,7 +642,7 @@ export class Tyrant extends Unit {
         this.faceTo(this.target.x, this.target.z);
         if (this.attackCd <= 0) {
           this.performAttack(this.target);
-          g.fx.shockwave(this.target.x, this.target.z, 1.6, 0xb27bff);
+          g.fx.shockwave(this.target.x, this.target.z, 1.6, this.def.fxColor);
         }
       } else this.moveToward(this.target.x, this.target.z, dt);
     } else if (homeD > 0.5) {
