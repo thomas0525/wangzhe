@@ -393,13 +393,15 @@ $('#loading').classList.add('done');
 
 // 邀请链接 ?room=1234：直接进入双人模式并加入
 const inviteCode = params.get('room');
-if (/^\d{4}$/.test(inviteCode || '')) {
+const savedSession = loadSession();
+if (inviteCode) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]room=\d*/, '').replace(/^&/, '?'));
+if (/^\d{4}$/.test(inviteCode || '') && savedSession?.code !== inviteCode) {
   setMode('duo');
   $('#room-input').value = inviteCode;
   $('#duo-msg').textContent = `好友邀请你加入房间 ${inviteCode}，正在加入…`;
   ensureNet().send({ t: 'join', code: inviteCode, hero: state.hero });
 } else {
-  const ses = loadSession();
+  const ses = savedSession;
   if (ses) {
     setMode('duo');
     $('#duo-msg').textContent = `正在回到房间 ${ses.code}…`;
