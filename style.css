@@ -300,3 +300,24 @@ body.dead-gray #game canvas { filter: grayscale(0.85) brightness(0.8); }
   #mode-tabs button { padding: 6px; font-size: 13px; }
   .big-btn, #ready-btn { padding: 9px; font-size: 15px; }
 }
+
+/* ---------- 竖屏 / 窄屏菜单修正 ---------- */
+#room-input::placeholder { font-size: 15px; letter-spacing: 1px; font-weight: 600; color: rgba(255,255,255,.4); }
+@media (max-width: 760px) {
+  .menu-inner { margin-left: 0; width: 100%; }
+}
+@media (orientation: portrait) {
+  #menu { flex-direction: column; align-items: stretch; justify-content: flex-start; }
+  #preview { position: relative; flex: none; width: 100%; height: 24vh; min-height: 150px; opacity: 1; top: auto; bottom: auto; right: auto; margin-bottom: -8px; }
+  .menu-inner { margin: 0 auto; }
+  #menu h1 { font-size: 38px; letter-spacing: 4px; }
+  #rotate-tip { position: static; transform: none; align-self: center; margin-top: 14px; }
+}
+@media (orientation: portrait) and (max-height: 760px) {
+  #preview { height: 17vh; min-height: 100px; }
+  #menu h1 { font-size: 32px; }
+  .sub { margin: 4px 0 10px; font-size: 13px; }
+  #hero-detail .sk { display: none; }
+  .hero-card { padding: 8px 6px; }
+  .hero-card .em { font-size: 24px; }
+}
