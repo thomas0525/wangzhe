@@ -24,10 +24,14 @@
       <div class="score"><span id="score-blue" class="b">0</span><span class="vs">⚔</span><span id="score-red" class="r">0</span></div>
       <div id="timer">00:00</div>
       <div id="kda">0/0 · 补刀 0</div>
+      <span id="ping" class="hidden"></span>
     </div>
     <canvas id="minimap" width="140" height="140"></canvas>
     <div id="feed"></div>
     <button id="pause-btn" aria-label="暂停">⏸</button>
+    <button id="chat-btn" class="hidden" aria-label="快捷消息">💬</button>
+    <div id="chat-panel"></div>
+    <div id="net-status"></div>
 
     <div id="banner"></div>
 
@@ -72,14 +76,25 @@
     <canvas id="preview"></canvas>
     <div class="menu-inner">
       <h1>峡谷对决 <small>3D</small></h1>
-      <p class="sub">单人 1v1 · 对战电脑 · 推掉敌方水晶即可获胜</p>
+      <p class="sub">1v1 MOBA · 对战电脑或好友 · 推掉敌方水晶即可获胜</p>
+      <div id="mode-tabs"><button data-mode="solo" class="sel">🤖 单人对电脑</button><button data-mode="duo">👥 双人对战</button></div>
       <div id="hero-cards"></div>
       <div id="hero-detail"></div>
-      <div class="row">
-        <span class="label">难度</span>
-        <div id="diffs"></div>
+      <div id="solo-panel">
+        <div class="row">
+          <span class="label">难度</span>
+          <div id="diffs"></div>
+        </div>
+        <button id="start-btn">开始对战</button>
       </div>
-      <button id="start-btn">开始对战</button>
+      <div id="duo-panel" class="hidden">
+        <button id="create-room" class="big-btn">➕ 新建房间</button>
+        <div class="join-row">
+          <input id="room-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="输入 4 位房间号" autocomplete="off" />
+          <button id="join-room">加入房间</button>
+        </div>
+        <p id="duo-msg"></p>
+      </div>
       <details class="help">
         <summary>操作说明</summary>
         <div>
@@ -91,6 +106,23 @@
       <p class="note">同人风格小游戏，原创角色与美术，与任何商业游戏无关。</p>
     </div>
     <div id="rotate-tip">📱 横屏游玩体验更佳</div>
+  </div>
+
+  <!-- 双人房间 -->
+  <div id="room" class="overlay hidden">
+    <div class="panel room-panel">
+      <div class="room-code">房间号 <b id="room-code">----</b></div>
+      <button id="copy-invite">📋 复制邀请发给好友</button>
+      <div class="seats">
+        <div class="seat blue" id="seat0"></div>
+        <div class="vs">VS</div>
+        <div class="seat red" id="seat1"></div>
+      </div>
+      <div id="room-heroes"></div>
+      <button id="ready-btn">准备</button>
+      <p id="room-msg"></p>
+      <button id="leave-room" class="ghost">离开房间</button>
+    </div>
   </div>
 
   <!-- 暂停 -->

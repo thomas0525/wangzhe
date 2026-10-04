@@ -1,8 +1,7 @@
-// 单位：英雄、小兵、防御塔、水晶、野怪
-import * as THREE from 'three';
+// 单位：英雄、小兵、防御塔、水晶、野怪（纯逻辑，网页和服务器共用；画面由 view.js 根据快照渲染）
 import { MINION_TYPES, ITEM_BY_ID, XP_TABLE, MAX_LEVEL, SPRING, BASE, lanePoint, laneT } from './config.js';
-import { buildHero, buildMinion, buildTower, buildCrystal, buildTyrant, buildGolem } from './models.js';
-import { bushAt } from './map.js';
+import { bushAt } from './terrain.js';
+import * as shop from './shop.js';
 
 let UID = 0;
 
@@ -28,15 +27,11 @@ export class Unit {
     this.lastDamagedAt = -99;
     this.lastHeroAttackAt = -99;
     this.revealUntil = 0;
-    this.anim = { atk: 0, hurt: 0, walk: 0, spin: 0, moving: false };
-    this.mesh = o.mesh;
-    this.mesh.position.set(this.x, 0, this.z);
-    game.scene.add(this.mesh);
+    this.anim = { spin: 0, moving: false };
+    this.atkSeq = 0; // 每次出手 +1，客户端据此播放攻击动作
     this.movable = o.movable !== false;
     this.mass = o.mass || 1;
-    this.barHeight = o.barHeight || 2;
     this.dmgMul = 1;
-    game.ui.createBar(this);
   }
 
   get maxHp() { return this.stats.maxHp; }
@@ -84,7 +79,7 @@ export class Unit {
     if (!this.alive) return;
     const before = this.hp;
     this.hp = Math.min(this.stats.maxHp, this.hp + n);
-    if (this.hp - before > 30 && this === this.game.player) this.game.ui.floatText(this, '+' + Math.round(this.hp - before), 'heal');
+    if (this.hp - before > 30 && this.kind === 'hero') this.game.toTeam(this.team, ['float', this.id, '+' + Math.round(this.hp - before), 'heal']);
   }
 
   dist(o) { return Math.hypot(o.x - this.x, o.z - this.z); }
@@ -118,7 +113,7 @@ export class Unit {
     const g = this.game;
     this.attackCd = 1 / this.stats.as;
     this.faceTo(target.x, target.z);
-    this.anim.atk = 0.25;
+    this.atkSeq++;
     this.revealUntil = g.time + 1;
     if (this.kind === 'hero' && target.kind === 'hero') this.lastHeroAttackAt = g.time;
     const crit = Math.random() < this.stats.crit;
@@ -139,52 +134,15 @@ export class Unit {
       g.schedule(0.08, onHit);
       g.fx.slashArc(this, this.stats.range + 0.5, this.kind === 'hero' ? 0xffffff : 0xdddddd, 0.6);
     }
-    if (this === g.player || target === g.player) g.sfx(this.stats.range > 3 ? 'shoot' : 'hit');
+    g.sfx(this.stats.range > 3 ? 'shoot' : 'hit', this, target);
   }
 
   update(dt) {
     this.updateBuffs();
     this.computeStats();
     if (this.attackCd > 0) this.attackCd -= dt;
+    if (this.anim.spin > 0) this.anim.spin -= dt;
     this.anim.moving = false;
-  }
-
-  syncMesh(dt) {
-    const m = this.mesh;
-    m.position.set(this.x, this.y, this.z);
-    const body = m.userData.body;
-    if (body) {
-      // 平滑转向
-      let d = this.facing - body.rotation.y;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      body.rotation.y += d * Math.min(1, dt * 14);
-      if (this.anim.spin > 0) {
-        this.anim.spin -= dt;
-        body.rotation.y += dt * 22;
-      }
-      if (this.anim.moving) this.anim.walk += dt * this.stats.speed * 1.6;
-      const sw = this.anim.moving ? Math.sin(this.anim.walk) : 0;
-      const legL = body.getObjectByName('legL'), legR = body.getObjectByName('legR');
-      if (legL) legL.rotation.x = sw * 0.6;
-      if (legR) legR.rotation.x = -sw * 0.6;
-      body.position.y = this.anim.moving ? Math.abs(Math.cos(this.anim.walk)) * 0.08 : 0;
-      const arm = body.getObjectByName('arm');
-      if (arm) {
-        if (this.anim.atk > 0) {
-          this.anim.atk -= dt;
-          const k = this.anim.atk / 0.25;
-          arm.rotation.x = -Math.sin(k * Math.PI) * 1.4;
-          arm.rotation.y = Math.sin(k * Math.PI) * 0.6;
-        } else {
-          arm.rotation.x = sw * 0.3;
-          arm.rotation.y *= 0.8;
-        }
-      }
-      const cape = body.getObjectByName('cape');
-      if (cape) cape.rotation.x = 0.15 + (this.anim.moving ? 0.35 : 0) + Math.sin(this.game.time * 3) * 0.05;
-    }
-    if (this.anim.hurt > 0) this.anim.hurt -= dt;
   }
 
   die(killer) {
@@ -196,15 +154,13 @@ export class Unit {
 
 // ---------------- 英雄 ----------------
 export class Hero extends Unit {
-  constructor(game, def, team, isPlayer) {
+  constructor(game, def, team) {
     const sp = SPRING[team];
     super(game, {
-      team, kind: 'hero', name: def.name, x: sp.x, z: sp.z, radius: 0.7, mesh: buildHero(def, team),
-      base: {}, mass: 3, barHeight: 2.9,
+      team, kind: 'hero', name: def.name, x: sp.x, z: sp.z, radius: 0.7,
+      base: {}, mass: 3,
     });
     this.def = def;
-    this.isPlayer = isPlayer;
-    this.mesh.userData.body.scale.setScalar(1.15);
     this.level = 1;
     this.xp = 0;
     this.gold = 300;
@@ -271,11 +227,9 @@ export class Hero extends Unit {
       this.computeStats();
       this.hp += this.stats.maxHp - before;
       this.game.fx.levelUp(this);
-      if (this.isPlayer) {
-        this.game.sfx('level');
-        const sk = this.def.skills.find((k) => k.unlock === this.level);
-        if (sk) this.game.ui.banner(`解锁技能：${sk.name}`, 'info');
-      }
+      this.game.toTeam(this.team, ['sfx', 'level']);
+      const sk = this.def.skills.find((k) => k.unlock === this.level);
+      if (sk) this.game.toTeam(this.team, ['banner', `解锁技能：${sk.name}`, 'info']);
     }
   }
 
@@ -292,7 +246,7 @@ export class Hero extends Unit {
       this.facing = Math.atan2(aim.dir.x, aim.dir.z);
     }
     this.skillCd[i] = sk.cd * (1 - Math.min(0.4, this.stats.cdr));
-    this.anim.atk = 0.25;
+    this.atkSeq++;
     this.revealUntil = this.game.time + 1.5;
     sk.cast(this.game, this, aim);
     return true;
@@ -315,15 +269,11 @@ export class Hero extends Unit {
   startRecall() {
     if (!this.alive || this.recall || this.dash) return;
     this.recall = { t: 0, dur: 4 };
-    this.recallFx = this.game.fx.recallBeam(this);
-    if (this.isPlayer) this.game.sfx('recall');
+    this.game.toTeam(this.team, ['sfx', 'recall']);
   }
 
   cancelRecall() {
-    if (!this.recall) return;
     this.recall = null;
-    this.recallFx?.remove();
-    this.recallFx = null;
   }
 
   dashTo(x, z, dur, opts = {}) {
@@ -333,52 +283,21 @@ export class Hero extends Unit {
     this.faceTo(p.x, p.z);
   }
 
-  // 合成：已拥有的配件抵扣价格
-  componentsOwned(id) {
-    const it = ITEM_BY_ID[id];
-    const pool = [...this.items];
-    const used = [];
-    for (const c of it.from || []) {
-      const i = pool.indexOf(c);
-      if (i >= 0) { used.push(c); pool.splice(i, 1); }
-    }
-    return used;
-  }
-
-  priceOf(id) {
-    return ITEM_BY_ID[id].cost - this.componentsOwned(id).reduce((a, c) => a + ITEM_BY_ID[c].cost, 0);
-  }
-
-  canBuy(id) {
-    const it = ITEM_BY_ID[id];
-    if (!it) return false;
-    const used = this.componentsOwned(id);
-    return this.items.length - used.length < 6 && this.gold >= this.priceOf(id);
-  }
+  // 商店规则见 shop.js
+  priceOf(id) { return shop.priceOf(this.items, id); }
+  canBuy(id) { return shop.canBuy(this.items, this.gold, id); }
+  nextBuild() { return shop.nextBuild(this.def.build, this.items, this.gold); }
 
   buy(id) {
-    const it = ITEM_BY_ID[id];
-    if (!it || !this.canBuy(id)) return false;
+    if (!this.canBuy(id)) return false;
     this.gold -= this.priceOf(id);
-    for (const c of this.componentsOwned(id)) this.items.splice(this.items.indexOf(c), 1);
+    for (const c of shop.componentsOwned(this.items, id)) this.items.splice(this.items.indexOf(c), 1);
     this.items.push(id);
     const before = this.stats.maxHp;
     this.computeStats();
     this.hp += this.stats.maxHp - before;
-    if (this.isPlayer) this.game.sfx('buy');
+    this.game.toTeam(this.team, ['sfx', 'buy']);
     return true;
-  }
-
-  // 推荐购买：下一件核心装备；买不起整件时先推荐配件
-  nextBuild() {
-    for (const id of this.def.build) {
-      if (this.items.includes(id)) continue;
-      const it = ITEM_BY_ID[id];
-      if (this.gold >= this.priceOf(id) || !it.from) return id;
-      const comp = it.from.find((c) => !this.items.includes(c));
-      return comp || id;
-    }
-    return null;
   }
 
   update(dt) {
@@ -425,7 +344,7 @@ export class Hero extends Unit {
         const sp = SPRING[this.team];
         this.x = sp.x; this.z = sp.z;
         g.fx.burst(this.x, 1, this.z, 0x9fdcff, 24);
-        if (this.isPlayer) g.snapCamera();
+        g.toTeam(this.team, ['snap']);
       }
     }
 
@@ -473,17 +392,9 @@ export class Hero extends Unit {
     this.buffs = [];
     this.computeStats();
     this.hp = this.stats.maxHp;
-    this.mesh.visible = true;
-    this.mesh.rotation.set(0, 0, 0);
     this.intent = { move: null, attack: null };
     this.game.fx.burst(sp.x, 1, sp.z, 0xffffff, 20);
-    if (this.isPlayer) this.game.snapCamera();
-  }
-
-  syncMesh(dt) {
-    super.syncMesh(dt);
-    const orb = this.mesh.getObjectByName('orb');
-    if (orb) orb.rotation.y += dt * 3;
+    this.game.toTeam(this.team, ['snap']);
   }
 }
 
@@ -493,9 +404,8 @@ export class Minion extends Unit {
     const def = MINION_TYPES[type];
     const p = lanePoint(team === 0 ? 0.08 : 0.92, offset);
     super(game, {
-      team, kind: 'minion', name: def.name, x: p.x, z: p.z, radius: def.radius, mesh: buildMinion(type, team),
+      team, kind: 'minion', name: def.name, x: p.x, z: p.z, radius: def.radius,
       base: { maxHp: def.hp, atk: def.atk, armor: def.armor, range: def.range, as: def.atkSpeed, speed: def.speed },
-      barHeight: type === 'cannon' ? 2 : 1.8,
     });
     this.type = type;
     this.def = def;
@@ -538,14 +448,13 @@ export class Tower extends Unit {
     const isCrystal = tier === 'crystal';
     super(game, {
       team, kind: isCrystal ? 'crystal' : 'tower', name: isCrystal ? '水晶' : (tier === 'outer' ? '外塔' : '高地塔'),
-      x: p.x, z: p.z, radius: isCrystal ? 2.6 : 1.5, mesh: isCrystal ? buildCrystal(team) : buildTower(team),
+      x: p.x, z: p.z, radius: isCrystal ? 2.6 : 1.5,
       base: { maxHp: isCrystal ? 5500 : (tier === 'outer' ? 4200 : 4800), atk: isCrystal ? 420 : 360, armor: 150, range: 9.5, as: 1, speed: 0 },
-      movable: false, barHeight: isCrystal ? 7.5 : 7.8,
+      movable: false,
     });
     this.tier = tier;
     this.heroHits = 0;
     this.projectileStyle = { color: team === 0 ? 0x8fc6ff : 0xff9a9a, size: 0.5, speed: 26, fromY: isCrystal ? 4.2 : 6.6 };
-    this.mesh.traverse((o) => { o.receiveShadow = true; });
   }
 
   update(dt) {
@@ -588,29 +497,17 @@ export class Tower extends Unit {
         amount *= 1.1;
       }
       g.addHoming(this, tg, this.projectileStyle, () => g.damage(this, tg, amount, 'phys', { tower: true }));
-      if (tg === g.player) g.sfx('tower');
-    }
-    const gem = this.mesh.getObjectByName('gem');
-    if (gem) gem.rotation.y += dt * (this.kind === 'crystal' ? 0.8 : 1.5);
-    if (this.kind === 'crystal') {
-      for (let i = 0; i < 3; i++) {
-        const s = this.mesh.getObjectByName('shard' + i);
-        const a = g.time * 1.2 + (i * Math.PI * 2) / 3;
-        s.position.set(Math.cos(a) * 2.6, 4 + Math.sin(g.time * 2 + i) * 0.5, Math.sin(a) * 2.6);
-        s.rotation.y += dt * 2;
-      }
+      if (tg.kind === 'hero') g.sfx('tower', tg);
     }
   }
-
-  syncMesh() {}
 }
 
 // ---------------- 野怪：峡谷巨兽、红蓝魔像 ----------------
 export class Monster extends Unit {
   constructor(game, def, x, z) {
     super(game, {
-      team: 2, kind: 'monster', name: def.name, x, z, radius: def.radius, mesh: def.id === 'tyrant' ? buildTyrant() : buildGolem(def.id),
-      base: { maxHp: def.hp, atk: def.atk, armor: def.armor, range: def.range, as: def.as, speed: 5 }, mass: 8, barHeight: def.barHeight,
+      team: 2, kind: 'monster', name: def.name, x, z, radius: def.radius,
+      base: { maxHp: def.hp, atk: def.atk, armor: def.armor, range: def.range, as: def.as, speed: 5 }, mass: 8,
     });
     this.def = def;
     this.home = { x, z };
@@ -655,4 +552,3 @@ export class Monster extends Unit {
   }
 }
 
-export { BASE };

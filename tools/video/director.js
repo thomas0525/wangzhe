@@ -39,7 +39,6 @@ function setItems(h, items) {
 function hideHero(h) {
   h.alive = false;
   h.respawnAt = 1e9;
-  h.mesh.visible = false;
 }
 
 function press(sel) {
@@ -140,7 +139,8 @@ const CAM = {
 function setupGame(hero, enemy, o = {}) {
   app().start({ heroId: hero, enemyId: enemy, difficulty: 'easy' });
   g = window.__game;
-  g.opts.autoplay = true; // 关闭键鼠输入，由导演控制
+  g.opts.autoplay = true;
+  g.sim.controllers = {}; // 关闭玩家控制器，英雄意图由导演直接设置
   if (!o.enemyAI) g.ais = [];
   const allowed = new Set(o.voices || []);
   g.voice = (n) => { if (allowed.has(n)) cue('voice', n); };
@@ -151,8 +151,8 @@ function setupGame(hero, enemy, o = {}) {
     cue('sfx', n);
   };
   g.time = o.time ?? 120;
-  g.nextWave = Infinity;
-  g.announced.add('5s');
+  g.sim.nextWave = Infinity;
+  g.sim.announced.add('5s');
   for (const c of g.camps) c.nextAt = Infinity;
   clearBanner();
   setLevel(g.player, o.level || 1);
@@ -161,7 +161,7 @@ function setupGame(hero, enemy, o = {}) {
   if (o.enemyItems) setItems(g.enemy, o.enemyItems);
   g.player.gold = o.gold ?? 300;
   g.camBase = [...(CAM[o.cam || 'normal'])];
-  g.camOffset.set(...g.camBase);
+  g.view.camOffset.set(...g.camBase);
   return g;
 }
 
@@ -227,7 +227,7 @@ const SCENES = [
         const a = aimFor(g.enemy, { range: 11 }, g.player);
         g.player.dodge = { x: -a.dir.z, z: a.dir.x };
       }],
-      [3.25, () => g.ui.floatText(g.player, '走位躲开！', 'crit')],
+      [3.25, () => g.ui.floatText(g.world.me, '走位躲开！', 'crit')],
       [3.7, () => { g.player.dodge = null; }],
       [4.4, () => cast(g.player, 0, g.enemy)],
     ],
@@ -364,7 +364,7 @@ const SCENES = [
     dur: 5.1, narr: ['n08', 0.1], chip: '🌿 草丛蹲人 · 闪现开大',
     setup() {
       setupGame('blade', 'archer', { level: 7, enemyLevel: 6, time: 260, voices: ['double_kill'] });
-      g.firstBlood = true;
+      g.sim.firstBlood = true;
       g.player.kills = 1; g.player.streak = 1; g.enemy.deaths = 1;
       const b = BUSHES[0];
       place(g.player, { x: b.x, z: b.z });
@@ -428,7 +428,7 @@ const SCENES = [
     },
     actions: [
       [0.15, () => { press('#btn-recall'); g.player.startRecall(); g.player.recall.dur = 2.2; }],
-      [3.7, () => { press('#rec-buy'); $('#rec-buy').click(); g.ui.floatText(g.player, '购买 嗜血之刃 🩸', 'gold'); }],
+      [3.7, () => { press('#rec-buy'); g.player.buy(g.player.nextBuild()); g.ui.floatText(g.world.me, '购买 嗜血之刃 🩸', 'gold'); }],
       [4.2, () => { g.player.intent.moveTo = L(0.08, 0); }],
     ],
     frame(t, dt) {
@@ -438,7 +438,7 @@ const SCENES = [
         const add = p.stats.maxHp * 0.75 * dt;
         p.hp = Math.min(p.stats.maxHp, p.hp + add);
         this.healAcc = (this.healAcc || 0) + add;
-        if (this.healAcc > 600) { g.ui.floatText(p, '+' + Math.round(this.healAcc), 'heal'); this.healAcc = 0; }
+        if (this.healAcc > 600) { g.ui.floatText(g.world.me, '+' + Math.round(this.healAcc), 'heal'); this.healAcc = 0; }
       }
     },
   },
@@ -450,26 +450,19 @@ const SCENES = [
       hideHero(g.enemy);
       g.player.kills = 5; g.enemy.deaths = 5;
       for (const u of g.units) {
-        if (u.kind === 'tower' && u.team === 1) {
-          u.alive = false; u.hp = 0; g.ui.removeBar(u);
-          u.mesh.position.y = -0.5; u.mesh.scale.y = 0.3;
-        }
+        if (u.kind === 'tower' && u.team === 1) { u.alive = false; u.hp = 0; }
       }
+      // 直接显示成废墟，不播放倒塌动画
+      g.publish();
+      for (const r of g.world.units) {
+        if (r.kind === 'tower' && r.team === 1) { r.mesh.position.y = -0.5; r.mesh.scale.y = 0.3; }
+      }
+      g.view.corpses = g.view.corpses.filter((c) => c.r.kind !== 'tower');
       this.crystal = g.units.find((u) => u.kind === 'crystal' && u.team === 1);
       this.crystal.hp = 2600;
       wave(0, 0.905, true);
       place(g.player, L(0.9, 2.5));
-      // 结算提前，避免和最后的解说重叠
-      g.endGame = function (win, crystal) {
-        if (this.over) return;
-        this.over = true;
-        this.endFocus = crystal;
-        this.speed = 0.35;
-        setTimeout(() => {
-          this.voice(win ? 'victory' : 'defeat');
-          this.opts.onEnd?.({ win, player: this.player, enemy: this.enemy, time: 612 });
-        }, 1000);
-      };
+      g.endDelay = 1.0; // 结算提前，避免和最后的解说重叠
       g.snapCamera();
     },
     frame(t) {
@@ -491,7 +484,7 @@ const SCENES = [
       place(g.enemy, L(0.56, 2));
       $('#hud').classList.add('vo-hide');
       this.focus = { x: L(0.42).x, z: L(0.42).z };
-      g.endFocus = this.focus;
+      g.view.endFocus = this.focus;
       g.snapCamera();
     },
     frame(t) {
@@ -660,7 +653,7 @@ function enterScene(i) {
   const s = SCENES[i];
   if (i > 0) { flashCut(); cue('cut', i); }
   s.setup();
-  if (g && !s.menu) g.snapCamera();
+  if (g && !s.menu) { g.publish(); g.snapCamera(); }
   $('#vo .cap').classList.toggle('low', !!s.capLow);
   $('#vo .cap').classList.toggle('cap-off', !!s.outro);
   if (s.narr) cue('narr', s.narr[0], s.start + s.narr[1]);
@@ -694,7 +687,7 @@ function frame(vnow) {
     // 镜头开场轻微推近
     if (g.camBase) {
       const k = 1 + 0.12 * Math.max(0, 1 - lt / 0.6);
-      g.camOffset.set(g.camBase[0], g.camBase[1] * k, g.camBase[2] * k);
+      g.view.camOffset.set(g.camBase[0], g.camBase[1] * k, g.camBase[2] * k);
     }
   }
   updateCaption();

@@ -1,17 +1,20 @@
 // 玩家输入：虚拟摇杆、技能按钮拖拽瞄准、键盘鼠标
+// 不直接改英雄：持续状态（移动方向、是否按住普攻）通过 state 交给客户端，离散操作通过 client.cmd() 发出
 import * as THREE from 'three';
-import { FLASH } from './heroes.js';
+import { FLASH, HEROES } from './heroes.js';
 
 const $ = (s) => document.querySelector(s);
 const MAX_DRAG = 80;
 
 export class Input {
-  constructor(game) {
-    this.game = game;
+  constructor(client) {
+    this.c = client;
+    this.def = HEROES[client.heroId];
+    this.flip = client.team === 1 ? -1 : 1; // 红方视角旋转 180°，屏幕方向要反过来
+    this.state = { move: null, atk: false };
     this.joy = { active: false, pid: null, ox: 0, oy: 0, x: 0, y: 0 };
     this.keys = new Set();
     this.attackHeld = false;
-    this.attackTap = 0;
     this.aim = null;
     this.mouse = { active: false, x: 0, z: 0, sx: 0, sy: 0 };
     this.raycaster = new THREE.Raycaster();
@@ -28,7 +31,7 @@ export class Input {
   dispose() { this.listeners.forEach((f) => f()); }
 
   setupDom() {
-    const hero = this.game.player.def;
+    const hero = this.def;
     // 技能按钮图标
     hero.skills.forEach((s, i) => {
       const b = $('#btn-s' + i);
@@ -76,7 +79,7 @@ export class Input {
       e.preventDefault();
       atk.setPointerCapture(e.pointerId);
       this.attackHeld = true;
-      this.attackTap = 1.2;
+      this.c.cmd({ t: 'tap' });
       atk.classList.add('down');
     });
     const atkUp = () => { this.attackHeld = false; atk.classList.remove('down'); };
@@ -88,7 +91,7 @@ export class Input {
     this.bindAimButton($('#btn-flash'), 'flash');
     this.on($('#btn-recall'), 'pointerdown', (e) => {
       e.preventDefault();
-      this.game.player.startRecall();
+      this.c.cmd({ t: 'recall' });
     });
 
     // 键盘
@@ -99,10 +102,10 @@ export class Input {
       const idx = { q: 0, e: 1, r: 2, 1: 0, 2: 1, 3: 2 }[k];
       if (idx !== undefined) this.keyCast(idx);
       if (k === 'f') this.keyCast('flash');
-      if (k === ' ' || k === 'j') { this.attackHeld = true; this.attackTap = 1.2; e.preventDefault(); }
-      if (k === 'b') this.game.player.startRecall();
-      if (k === 'p' || k === 'tab') { this.game.ui.toggleShop(); e.preventDefault(); }
-      if (k === 'escape') this.game.ui.toggleShop(false);
+      if (k === ' ' || k === 'j') { this.attackHeld = true; this.c.cmd({ t: 'tap' }); e.preventDefault(); }
+      if (k === 'b') this.c.cmd({ t: 'recall' });
+      if (k === 'p' || k === 'tab') { this.c.view.ui.toggleShop(); e.preventDefault(); }
+      if (k === 'escape') this.c.view.ui.toggleShop(false);
     });
     this.on(window, 'keyup', (e) => {
       const k = e.key.toLowerCase();
@@ -116,7 +119,7 @@ export class Input {
     this.on(window, 'blur', () => { this.keys.clear(); this.attackHeld = false; });
 
     // 鼠标位置（桌面端瞄准）
-    const canvas = this.game.renderer.domElement;
+    const canvas = this.c.view.renderer.domElement;
     this.on(canvas, 'pointermove', (e) => {
       if (e.pointerType !== 'mouse') return;
       this.mouse.active = true;
@@ -125,7 +128,7 @@ export class Input {
     });
     this.on(canvas, 'pointerdown', (e) => {
       // 桌面端：点击地面也可以普攻附近目标
-      if (e.pointerType === 'mouse' && e.button === 0) { this.attackTap = 1.2; }
+      if (e.pointerType === 'mouse' && e.button === 0) this.c.cmd({ t: 'tap' });
     });
     this.on(canvas, 'contextmenu', (e) => e.preventDefault());
   }
@@ -166,14 +169,14 @@ export class Input {
   }
 
   spec(idx) {
-    return idx === 'flash' ? FLASH.aim : this.game.player.def.skills[idx].aim;
+    return idx === 'flash' ? FLASH.aim : this.def.skills[idx].aim;
   }
 
   canUse(idx) {
-    const p = this.game.player;
-    if (!p.alive) return false;
+    const p = this.c.world.me;
+    if (!p || !p.alive || !p.skillCd) return false;
     if (idx === 'flash') return p.flashCd <= 0;
-    return p.level >= p.def.skills[idx].unlock && p.skillCd[idx] <= 0;
+    return p.level >= this.def.skills[idx].unlock && p.skillCd[idx] <= 0;
   }
 
   keyCast(idx) {
@@ -188,7 +191,7 @@ export class Input {
 
   // 根据当前拖拽 / 鼠标计算瞄准
   computeAim() {
-    const a = this.aim, p = this.game.player, spec = this.spec(a.idx);
+    const a = this.aim, p = this.c.world.me, spec = this.spec(a.idx);
     const range = spec.range || spec.radius || 3;
     if (a.mouse) {
       const m = this.mouseWorld();
@@ -200,7 +203,7 @@ export class Input {
     }
     if (a.dragging) {
       const d = Math.hypot(a.dx, a.dy) || 1;
-      const dir = { x: a.dx / d, z: a.dy / d };
+      const dir = { x: (this.flip * a.dx) / d, z: (this.flip * a.dy) / d };
       const k = Math.min(1, d / MAX_DRAG);
       return { dir, point: { x: p.x + dir.x * range * k, z: p.z + dir.z * range * k } };
     }
@@ -208,8 +211,8 @@ export class Input {
   }
 
   autoAim(idx, range) {
-    const g = this.game, p = this.game.player;
-    const t = g.autoTarget(p, range + 1.5, true);
+    const p = this.c.world.me;
+    const t = this.c.world.autoTarget(p, range + 1.5, true);
     if (t) {
       const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz) || 1;
       const dir = { x: dx / d, z: dz / d };
@@ -230,12 +233,12 @@ export class Input {
     a.btn?.classList.remove('down');
     this.showCancel(false);
     $('#cancel-zone').classList.remove('hot');
-    this.game.indicator.hide();
-    if (cancel) return;
-    const p = this.game.player;
+    this.c.view.indicator.hide();
+    if (cancel || !this.c.world.me) return;
     const aim = this.computeAimFor(a);
-    if (a.idx === 'flash') p.castFlash(aim.dir);
-    else p.castSkill(a.idx, aim);
+    const r2 = (v) => Math.round(v * 100) / 100;
+    if (a.idx === 'flash') this.c.cmd({ t: 'flash', dir: [r2(aim.dir.x), r2(aim.dir.z)] });
+    else this.c.cmd({ t: 'cast', i: a.idx, dir: [r2(aim.dir.x), r2(aim.dir.z)], pt: [r2(aim.point.x), r2(aim.point.z)] });
   }
 
   computeAimFor(a) {
@@ -247,12 +250,13 @@ export class Input {
   }
 
   mouseWorld() {
-    const g = this.game;
-    const ndc = new THREE.Vector2((this.mouse.sx / g.width) * 2 - 1, -(this.mouse.sy / g.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, g.camera);
+    const v = this.c.view;
+    const ndc = new THREE.Vector2((this.mouse.sx / v.width) * 2 - 1, -(this.mouse.sy / v.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, v.camera);
     const hit = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(this.plane, hit)) return { x: hit.x, z: hit.z };
-    return { x: g.player.x, z: g.player.z };
+    const p = this.c.world.me;
+    return { x: p.x, z: p.z };
   }
 
   moveVec() {
@@ -264,41 +268,27 @@ export class Input {
     if (this.keys.has('d') || this.keys.has('arrowright')) x += 1;
     const d = Math.hypot(x, z);
     if (d < 0.2) return null;
-    return { x: x / d, z: z / d };
+    return { x: (this.flip * x) / d, z: (this.flip * z) / d };
   }
 
-  update(dt) {
-    const g = this.game, p = g.player;
-    if (!p.alive) { p.intent.attack = null; p.intent.move = null; return; }
-    p.intent.move = this.moveVec();
-    if (this.attackTap > 0) this.attackTap -= dt;
-    const wantAttack = this.attackHeld || this.attackTap > 0;
-    if (wantAttack) {
-      let t = p.intent.attack;
-      if (!t || !t.alive || p.edgeDist(t) > p.stats.range + 4 || !g.isTargetable(t, p.team)) t = g.autoTarget(p, Math.max(p.stats.range + 2.5, 6));
-      // 优先英雄
-      const h = g.autoTarget(p, p.stats.range + 1, true, true);
-      if (h) t = h;
-      p.intent.attack = t;
-      if (!t) this.attackTap = 0;
-      if (p.intent.attackDone && !this.attackHeld) this.attackTap = 0;
-    } else {
-      p.intent.attack = null;
-    }
-    p.intent.attackDone = false;
+  update() {
+    const p = this.c.world.me;
+    this.state = { move: p && p.alive ? this.moveVec() : null, atk: this.attackHeld };
+    if (!p) return;
+    const ind = this.c.view.indicator;
     if (this.aim && this.aim.dragging) {
-      const aim = this.computeAim();
-      g.indicator.show(p, aim, this.spec(this.aim.idx), this.aim.cancel);
+      ind.show(p, this.computeAim(), this.spec(this.aim.idx), this.aim.cancel);
     } else if (this.aim && this.spec(this.aim.idx).type === 'self') {
-      g.indicator.show(p, { dir: { x: 0, z: 1 } }, this.spec(this.aim.idx), this.aim.cancel);
+      ind.show(p, { dir: { x: 0, z: 1 } }, this.spec(this.aim.idx), this.aim.cancel);
     }
     this.updateButtons();
   }
 
   updateButtons() {
-    const p = this.game.player;
+    const p = this.c.world.me;
+    if (!p || !p.skillCd) return;
     for (let i = 0; i < 3; i++) {
-      const sk = p.def.skills[i];
+      const sk = this.def.skills[i];
       this.paintBtn($('#btn-s' + i), p.level < sk.unlock, p.skillCd[i], sk.cd * (1 - Math.min(0.4, p.stats.cdr)));
     }
     this.paintBtn($('#btn-flash'), false, p.flashCd, FLASH.cd);

@@ -108,3 +108,8 @@ export const MAX_LEVEL = 15;
 export const WAVE_INTERVAL = 26;
 export const FIRST_WAVE = 12;
 export const PASSIVE_GOLD = 5;
+
+// 双人对战
+export const QUICK_CHAT = ['干得漂亮！', '进攻！', '撤退！', '稳住，我们能赢', '大意了…', '😂😂😂', '👍', '🤝 GG'];
+// 部署在 GitHub Pages 时，双人对战连接的服务器地址（页面由服务器本身提供时用同源地址）
+export const SERVER_ORIGIN = 'https://wangzhe-production.up.railway.app';
