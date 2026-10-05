@@ -321,3 +321,4 @@ body.dead-gray #game canvas { filter: grayscale(0.85) brightness(0.8); }
   .hero-card { padding: 8px 6px; }
   .hero-card .em { font-size: 24px; }
 }
+.vo-press { transform: scale(.94) !important; filter: brightness(1.25); }

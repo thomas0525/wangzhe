@@ -411,7 +411,25 @@ if (/^\d{4}$/.test(inviteCode || '') && savedSession?.code !== inviteCode) {
 
 // 宣传视频录制（tools/video）
 window.__app = { start, backToMenu, selectHero };
-if (params.has('capture')) import('../tools/video/director.js');
+if (params.get('capture') === 'feed') {
+  // 双人宣传视频：由外层页面直接喂快照，界面走真实的联机代码
+  window.__app.duo = {
+    setNet(n) { net = n; },
+    setMode,
+    onNetMessage,
+    onNetStatus,
+    get game() { return game; },
+    toMenu() {
+      game?.destroy();
+      game = null;
+      lobby = null;
+      for (const id of ['#hud', '#end', '#room', '#pause']) $(id).classList.add('hidden');
+      $('#net-status').classList.remove('show');
+      $('#menu').classList.remove('hidden');
+      preview.resume();
+    },
+  };
+} else if (params.has('capture')) import('../tools/video/director.js');
 
 if (params.has('start') || params.has('autoplay')) {
   const hero = params.get('hero') || state.hero;

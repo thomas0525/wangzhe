@@ -66,8 +66,11 @@ const page = await browser.newPage({ viewport: { width: w, height: h }, deviceSc
 page.on('pageerror', (e) => console.error('pageerror:', e.message));
 page.on('console', (m) => { if (m.type() === 'error') console.error('console:', m.text()); });
 await page.addInitScript(shim);
-await page.goto(`${base}?capture&layout=${cover === 'xhs' ? 'v' : layout}${cover ? '&cover=' + cover : ''}`);
-while (!(await page.evaluate(() => !!window.__director?.ready))) await new Promise((r) => setTimeout(r, 100));
+const lay = cover === 'xhs' ? 'v' : layout;
+// --page=tools/video/duo.html 录制双人联机视频；默认录制游戏页面本身
+await page.goto(args.page ? `${base}${args.page}?layout=${lay}${cover ? '&cover=' + cover : ''}` : `${base}?capture&layout=${lay}${cover ? '&cover=' + cover : ''}`);
+// 等待就绪（期间推进虚拟时钟，页面里的 setTimeout 才会执行）
+while (!(await page.evaluate(() => { window.__vt.advance(16); return !!window.__director?.ready; }))) await new Promise((r) => setTimeout(r, 50));
 // 预热：让菜单和资源先跑几帧
 for (let i = 0; i < 5; i++) await page.evaluate(() => window.__vt.advance(33));
 const total = await page.evaluate(() => { window.__director.begin(window.__vt.now()); return window.__director.total; });

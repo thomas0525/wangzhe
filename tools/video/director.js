@@ -104,7 +104,7 @@ function holdAlive(u, frac) {
   if (u.hp < u.stats.maxHp * frac) u.hp = u.stats.maxHp * frac;
 }
 function finish(src, u) {
-  if (u.alive) g.damage(src, u, 1e6, 'true');
+  if (u.alive) { u.hp = 1; g.damage(src, u, 60, 'true'); }
 }
 
 // 摇杆可视化：让画面看起来是有人在操作

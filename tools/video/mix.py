@@ -1,6 +1,6 @@
 """合成宣传视频音轨：背景音乐（程序生成）+ 游戏音效 + 播报员语音 + 解说，解说时自动压低背景音乐。
 
-用法：uv run --with numpy python mix.py <cues.json> <ffmpeg> <out.wav>
+用法：uv run --with numpy python mix.py <cues.json> <ffmpeg> <out.wav> [解说目录]
 """
 import json
 import subprocess
@@ -187,7 +187,8 @@ def main():
     data = json.loads(Path(cues_path).read_text())
     total = data['total']
     cues = data['cues']
-    narr_d = json.loads((HERE / 'narration' / 'durations.json').read_text())
+    narr_dir = Path(sys.argv[4]) if len(sys.argv) > 4 else HERE / 'narration'
+    narr_d = json.loads((narr_dir / 'durations.json').read_text())
     menu = next(((c['t'], c['t'] + 3.7) for c in cues if c['type'] == 'cut' and c['name'] == 1), (5.5, 9.2))
 
     n = int(total * SR)
@@ -199,7 +200,7 @@ def main():
     def clip(kind, name):
         key = (kind, name)
         if key not in cache:
-            p = (HERE / 'narration' / f'{name}.mp3') if kind == 'narr' else (ROOT / 'audio' / 'voice' / f'{name}.mp3')
+            p = (narr_dir / f'{name}.mp3') if kind == 'narr' else (ROOT / 'audio' / 'voice' / f'{name}.mp3')
             cache[key] = decode(ff, p)
         return cache[key]
 
