@@ -170,9 +170,53 @@ function feed(dt) {
 }
 
 const A = () => sim.heroes[0], B = () => sim.heroes[1];
+const lobbyAll = (m) => { duo(0).onNetMessage(m); duo(1).onNetMessage(m); };
+function setChip(text) {
+  const chip = $('#chip');
+  chip.classList.remove('on');
+  chip.querySelector('span').textContent = text || '';
+  if (text) { void chip.offsetWidth; chip.classList.add('on'); }
+}
+
+// 推水晶：一边胜利一边失败（killAt：水晶被推掉的时刻）
+function victoryScene({ dur, narr, killAt }) {
+  return {
+    dur, narr, chip: '💎 推掉水晶', voices: [],
+    setup() {
+      setLevel(A(), 12); setLevel(B(), 11);
+      A().items = ['boots', 'vamp', 'plate', 'cleaver']; A().computeStats(); A().hp = A().stats.maxHp;
+      for (const u of sim.units) if (u.kind === 'tower' && u.team === 1) { u.alive = false; u.hp = 0; }
+      sim.units = sim.units.filter((u) => u.kind !== 'minion');
+      this.crystal = sim.units.find((u) => u.kind === 'crystal' && u.team === 1);
+      this.crystal.hp = 2600;
+      wave(0, 0.9);
+      place(A(), L(0.9, 2.5));
+      place(B(), L(0.93, -2));
+      B().alive = false; B().hp = 0; B().respawnAt = sim.time + 25; B().deaths++;
+      this.rubble = false;
+    },
+    frame(t) {
+      if (!this.rubble) {
+        // 已被摧毁的防御塔直接显示为废墟
+        this.rubble = true;
+        for (let i = 0; i < 2; i++) {
+          const g = duo(i).game;
+          for (const r of g.world.units) if (r.kind === 'tower' && r.team === 1 && r.mesh) { r.alive = false; r.mesh.position.y = -0.5; r.mesh.scale.y = 0.3; }
+          g.view.corpses = g.view.corpses.filter((c) => c.r.kind !== 'tower' || c.r.team !== 1);
+          for (const r of g.world.units) if (r.kind === 'tower' && r.team === 1) g.view.ui.removeBar(r);
+        }
+      }
+      const a = A();
+      if (this.crystal.alive) {
+        a.intent.attack = this.crystal;
+        if (t < killAt) holdAlive(this.crystal, 0.04); else { finish(a, this.crystal); cue('voice', 'victory', T + 1.0); }
+      }
+    },
+  };
+}
 
 // ---------- 分镜 ----------
-const SCENES = [
+const SCENES_FULL = [
   {
     // 开场：同一局的两台手机，双方正在交手
     dur: 4.3, narr: ['d01', 0.15], title: true,
@@ -317,46 +361,86 @@ const SCENES = [
       if (B().alive) B().intent.moveTo = L(0.7, 0);
     },
   },
-  {
-    // 推水晶：一边胜利一边失败
-    dur: 6.1, narr: ['d09', 0.1], chip: '💎 推掉水晶', voices: [],
-    setup() {
-      setLevel(A(), 12); setLevel(B(), 11);
-      A().items = ['boots', 'vamp', 'plate', 'cleaver']; A().computeStats(); A().hp = A().stats.maxHp;
-      for (const u of sim.units) if (u.kind === 'tower' && u.team === 1) { u.alive = false; u.hp = 0; }
-      sim.units = sim.units.filter((u) => u.kind !== 'minion');
-      this.crystal = sim.units.find((u) => u.kind === 'crystal' && u.team === 1);
-      this.crystal.hp = 2600;
-      wave(0, 0.9);
-      place(A(), L(0.9, 2.5));
-      place(B(), L(0.93, -2));
-      B().alive = false; B().hp = 0; B().respawnAt = sim.time + 25; B().deaths++;
-      this.rubble = false;
-    },
-    frame(t) {
-      if (!this.rubble) {
-        // 已被摧毁的防御塔直接显示为废墟
-        this.rubble = true;
-        for (let i = 0; i < 2; i++) {
-          const g = duo(i).game;
-          for (const r of g.world.units) if (r.kind === 'tower' && r.team === 1 && r.mesh) { r.alive = false; r.mesh.position.y = -0.5; r.mesh.scale.y = 0.3; }
-          g.view.corpses = g.view.corpses.filter((c) => c.r.kind !== 'tower' || c.r.team !== 1);
-          for (const r of g.world.units) if (r.kind === 'tower' && r.team === 1) g.view.ui.removeBar(r);
-        }
-      }
-      const a = A();
-      if (this.crystal.alive) {
-        a.intent.attack = this.crystal;
-        if (t < 3.2) holdAlive(this.crystal, 0.04); else { finish(a, this.crystal); cue('voice', 'victory', T + 1.0); }
-      }
-    },
-  },
+  victoryScene({ dur: 6.1, narr: ['d09', 0.1], killAt: 3.2 }),
   {
     // 结尾卡片
     dur: 6.0, narr: ['d10', 0.1], outro: true,
     frame() {},
   },
 ];
+
+// ---------- 小红书短版（约 25 秒）：节奏更快，去掉“扣 1”引导 ----------
+const SHORT = P.get('cut') === 'short';
+const SCENES_SHORT = [
+  {
+    dur: 3.3, narr: ['s01', 0.1], title: true,
+    setup() {
+      startMatch({ level: 8, time: 240 });
+      place(A(), L(0.475, -1)); place(B(), L(0.535, 1));
+      wave(0, 0.49); wave(1, 0.52);
+    },
+    actions: [
+      [0.2, () => cast(B(), 1, A())],
+      [0.7, () => cast(A(), 0, B())],
+      [1.2, () => cast(B(), 2, A())],
+      [1.9, () => cast(A(), 2, B())],
+      [2.6, () => cast(A(), 1)],
+    ],
+    frame() { A().intent.attack = B(); B().intent.attack = A(); protect(A(), 0.4); protect(B(), 0.4); },
+  },
+  {
+    dur: 3.9, narr: ['s02', 0.1], chip: '🏠 4 位房间号 · 好友秒进', menu: true,
+    setup() {
+      sim = null;
+      for (let i = 0; i < 2; i++) {
+        duo(i).toMenu();
+        duo(i).setMode('duo');
+        win(i).__app.selectHero(HEROES[i]);
+        fakeNet(i);
+        doc(i).querySelector('#room-input').value = '';
+      }
+    },
+    actions: [
+      [0.15, () => press(0, '#create-room')],
+      [0.35, () => { duo(0).onNetMessage({ t: 'room', code: CODE, seat: 0, token: 'x' }); duo(0).onNetMessage(lobbyMsg([seat('blade'), null])); }],
+      ...[...CODE].map((ch, k) => [0.6 + k * 0.18, () => { doc(1).querySelector('#room-input').value += ch; }]),
+      [1.4, () => press(1, '#join-room')],
+      [1.6, () => { duo(1).onNetMessage({ t: 'room', code: CODE, seat: 1, token: 'x' }); lobbyAll(lobbyMsg([seat('blade'), seat('mage')])); }],
+      [2.2, () => { press(0, '#ready-btn'); lobbyAll(lobbyMsg([seat('blade', true), seat('mage')])); }],
+      [2.6, () => { press(1, '#ready-btn'); lobbyAll(lobbyMsg([seat('blade', true), seat('mage', true)], 'countdown', 3)); }],
+      [3.3, () => lobbyAll(lobbyMsg([seat('blade', true), seat('mage', true)], 'countdown', 2))],
+    ],
+  },
+  {
+    dur: 7.5, narr: ['s03', 0.3], chip: '🔄 同一局 · 两个视角', voices: ['first_blood'],
+    setup() {
+      startMatch({ level: 6, time: 150 });
+      setLevel(B(), 5);
+      A().addBuff({ id: 'redbuff', dur: 70 });
+      place(A(), L(0.47, -1)); place(B(), L(0.54, 1));
+      wave(0, 0.49); wave(1, 0.52);
+      B().hp = B().stats.maxHp * 0.55;
+    },
+    actions: [
+      [0.6, () => cast(B(), 0, A())],
+      [1.4, () => cast(A(), 0, B())],
+      [2.1, () => cast(A(), 2, B())],
+      [2.7, () => cast(A(), 1)],
+      [2.8, () => { B().intent.moveTo = L(0.62, 0); }],
+      [4.6, () => setChip('⚡ 一血！对面黑屏')],
+    ],
+    frame(t) {
+      const a = A(), b = B();
+      if (t > 1.2) a.intent.attack = b.alive ? b : nearestFoeMinion(a); else a.intent.attack = nearestFoeMinion(a);
+      if (t < 2.8 && b.alive) b.intent.attack = a;
+      if (t < 4.6) holdAlive(b, 0.12); else finish(a, b);
+      protect(a, 0.5);
+    },
+  },
+  victoryScene({ dur: 6.0, narr: ['s04', 0.1], killAt: 2.9 }),
+  { dur: 4.0, narr: ['s05', 0.1], outro: true, frame() {} },
+];
+const SCENES = SHORT ? SCENES_SHORT : SCENES_FULL;
 
 let acc = 0;
 for (const s of SCENES) { s.start = acc; acc += s.dur; }
@@ -416,9 +500,11 @@ function frame(vnow) {
 async function init() {
   layout();
   addEventListener('resize', layout);
-  const txt = await (await fetch('duo/narration.txt')).text();
+  const dir = SHORT ? 'duo/short' : 'duo';
+  const txt = await (await fetch(dir + '/narration.txt')).text();
   for (const line of txt.split('\n')) { const [k, v] = line.split('|'); if (k && v) narrText[k] = v.trim(); }
-  narrDur = await (await fetch('duo/narration/durations.json')).json();
+  narrDur = await (await fetch(dir + '/narration/durations.json')).json();
+  if (SHORT) $('#outro .cta').textContent = '🎮 手机浏览器打开就能玩';
   // 等两台手机加载完成
   await new Promise((res) => {
     const check = () => (FRAMES.every((f) => f.contentWindow?.__app?.duo) ? res() : setTimeout(check, 50));

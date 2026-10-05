@@ -3,13 +3,18 @@
 # 依赖：node、uv、网络（首次需 npm i 和生成解说）。
 # 用法：bash tools/video/build.sh            # 第一条：AI 生成王者
 #       VIDEO=duo bash tools/video/build.sh  # 第二条：双人联机
+#       VIDEO=duo-short bash tools/video/build.sh  # 第二条的小红书短版（约 25 秒）
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(cd ../.. && pwd)"
 OUT="$ROOT/video-out"
 mkdir -p "$OUT"
 [ -d node_modules ] || npm i --silent
-if [ "${VIDEO:-}" = duo ]; then
+if [ "${VIDEO:-}" = duo-short ]; then
+  # 小红书短版：只出竖版，封面沿用双人联机封面
+  PAGE="--page=tools/video/duo.html --cut=short"; NARR="duo/short/narration"; PREFIX="峡谷对决-双人联机-短版"; TAG="duo-short-"
+  LAYOUTS="${LAYOUTS:-v}"; SKIP_COVERS=1
+elif [ "${VIDEO:-}" = duo ]; then
   PAGE="--page=tools/video/duo.html"; NARR="duo/narration"; PREFIX="峡谷对决-双人联机"; TAG="duo-"
 else
   PAGE=""; NARR="narration"; PREFIX="峡谷对决-宣传"; TAG=""

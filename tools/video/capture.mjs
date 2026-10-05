@@ -68,7 +68,7 @@ page.on('console', (m) => { if (m.type() === 'error') console.error('console:', 
 await page.addInitScript(shim);
 const lay = cover === 'xhs' ? 'v' : layout;
 // --page=tools/video/duo.html 录制双人联机视频；默认录制游戏页面本身
-await page.goto(args.page ? `${base}${args.page}?layout=${lay}${cover ? '&cover=' + cover : ''}` : `${base}?capture&layout=${lay}${cover ? '&cover=' + cover : ''}`);
+await page.goto(args.page ? `${base}${args.page}?layout=${lay}${cover ? '&cover=' + cover : ''}${args.cut ? '&cut=' + args.cut : ''}` : `${base}?capture&layout=${lay}${cover ? '&cover=' + cover : ''}`);
 // 等待就绪（期间推进虚拟时钟，页面里的 setTimeout 才会执行）
 while (!(await page.evaluate(() => { window.__vt.advance(16); return !!window.__director?.ready; }))) await new Promise((r) => setTimeout(r, 50));
 // 预热：让菜单和资源先跑几帧
