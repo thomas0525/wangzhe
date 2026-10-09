@@ -87,7 +87,7 @@ VOICE=zh-CN-XiaoxiaoNeural bash tools/gen-voice.sh   # 换音色（如更沉稳�
 - `director.js`：分镜脚本（中路对线、防御塔、推塔、红蓝 buff、大招、草丛伏击、峡谷巨兽、回城、推水晶）
 - `capture.mjs`：接管页面时钟逐帧推进并截图，保证 30fps 匀速
 - `mix.py`：程序生成背景音乐 + 游戏音效 + 播报 + 解说（Edge TTS `zh-CN-YunxiNeural`），解说时自动压低音乐
-- `build.sh`：一键生成，输出到 `video-out/`
+- `build.sh`：一键生成，成片和封面输出到 `~/Movies/峡谷对决/`（可用 `OUT=目录` 覆盖）
 
 ```bash
 cd tools/video && npm i && bash gen-narration.sh   # 首次：安装依赖、生成解说

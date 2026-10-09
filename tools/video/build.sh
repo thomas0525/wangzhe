@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(cd ../.. && pwd)"
-OUT="$ROOT/video-out"
+OUT="${OUT:-$HOME/Movies/峡谷对决}"  # 成片、封面输出目录（不进代码仓库）
 mkdir -p "$OUT"
 [ -d node_modules ] || npm i --silent
 if [ "${VIDEO:-}" = duo-short ]; then
